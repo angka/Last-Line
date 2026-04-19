@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node dist/server/index.js)",
+      "Bash(echo \"Server started, PID: $!\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e *)",
+      "Bash(node update_parser.js)"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"version":3,"file":"RegenEngine.d.ts","sourceRoot":"","sources":["../../../src/server/engine/RegenEngine.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,eAAe,EAAE,QAAQ,EAAE,MAAM,aAAa,CAAC;AAIzE,wBAAgB,SAAS,IAAI,MAAM,CAElC;AAED,wBAAgB,aAAa,CAAC,IAAI,EAAE,QAAQ,EAAE,KAAK,EAAE,UAAU,GAAG,eAAe,CAYhF;AAsBD,wBAAgB,eAAe,CAAC,KAAK,EAAE,UAAU,GAAG,MAAM,CAQzD"}

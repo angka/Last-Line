@@ -1,0 +1,23 @@
+{
+  "name": "last-line",
+  "version": "0.1.0",
+  "description": "CLI Multiplayer Adventure Game — Server",
+  "main": "dist/server/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server/index.js",
+    "dev": "tsc && node dist/server/index.js",
+    "client": "node dist/client/index.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.2",
+    "uuid": "^9.0.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3"
+  }
+}

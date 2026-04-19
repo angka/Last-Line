@@ -105,6 +105,7 @@ export function createDefaultSave(playerName: string): SaveFile {
       unlockedDungeons: [],
       defeatedBosses: [],
       dungeonProgress: [],
+      dungeonChests: [],
     },
     pendingLoot: [],
     socialPrefs: {

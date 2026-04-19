@@ -1,7 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AREAS = void 0;
+exports.CITIES = exports.AREAS = void 0;
 exports.getArea = getArea;
+exports.isDungeonArea = isDungeonArea;
+exports.isBossFloor = isBossFloor;
+exports.getDungeonId = getDungeonId;
+exports.getCityById = getCityById;
 exports.describeArea = describeArea;
 exports.AREAS = {
     ashford_village_square: {
@@ -19,6 +23,7 @@ exports.AREAS = {
             south: 'ashford_village_square',
             east: 'goblin_ravine_road',
             west: 'thornwood_edge',
+            north: 'goblin_warren_entrance',
         },
         baseEncounterChance: 0.20,
         safeZone: false, regenState: 'exploring',
@@ -54,6 +59,7 @@ exports.AREAS = {
             north: 'coal_hollow_mines',
             south: 'river_delta_marshland',
             east: 'amber_savanna',
+            north_west: 'sunken_mines_entrance',
         },
         baseEncounterChance: 0,
     },
@@ -98,6 +104,7 @@ exports.AREAS = {
         exits: {
             south: 'thornwood_edge',
             north: 'arashiyama_bamboo_grove',
+            east: 'thornwick_ruins_entrance',
         },
         baseEncounterChance: 0,
     },
@@ -178,6 +185,7 @@ exports.AREAS = {
             north: 'emberveil_square',
             east: 'shadow_thicket',
             south: 'crystalmere_city_square',
+            west: 'mirefen_catacombs_entrance',
         },
         baseEncounterChance: 0.45,
         safeZone: false, regenState: 'exploring',
@@ -306,6 +314,7 @@ exports.AREAS = {
             north: 'dragons_spine_ridge',
             east: 'moorland_expanse',
             south: 'ghostwood',
+            north_east: 'dragons_lair_entrance',
         },
         baseEncounterChance: 0,
     },
@@ -446,15 +455,222 @@ exports.AREAS = {
         baseEncounterChance: 0,
         safeZone: true, regenState: 'city',
     },
+    // ── Dungeon Interiors ────────────────────────────────────────────────
+    // Goblin Warren (Ashford region — enter from north of Ashford Village)
+    goblin_warren_entrance: {
+        id: 'goblin_warren_entrance', name: "Goblin Warren — Entrance", biome: 'dungeon',
+        levelRange: [1, 5],
+        description: 'A foul-smelling burrow dug into the hillside. Bones and scraps litter the entrance tunnel. The chittering of goblins echoes from within.',
+        exits: { south: 'whispering_plains', north: 'goblin_warren_f2' },
+        baseEncounterChance: 0.35,
+        safeZone: false, regenState: 'exploring',
+    },
+    goblin_warren_f2: {
+        id: 'goblin_warren_f2', name: "Goblin Warren — Floor 2", biome: 'dungeon',
+        levelRange: [2, 6],
+        description: 'Deeper in the warrens. Crude torches cast flickering orange light. Goblin guards eye you from alcoves.',
+        exits: { south: 'goblin_warren_entrance', north: 'goblin_warren_f3' },
+        baseEncounterChance: 0.40,
+        safeZone: false, regenState: 'exploring',
+    },
+    goblin_warren_f3: {
+        id: 'goblin_warren_f3', name: "Goblin Warren — Floor 3 (Boss)", biome: 'dungeon',
+        levelRange: [3, 7],
+        description: 'A wide chamber lit by a massive bonfire. The Goblin Chieftain sits on a throne of bones at the far end.',
+        exits: { south: 'goblin_warren_f2' },
+        baseEncounterChance: 0.55,
+        safeZone: false, regenState: 'exploring',
+    },
+    // Thornwick Ruins (Thornwick region — east of Thornwick Square)
+    thornwick_ruins_entrance: {
+        id: 'thornwick_ruins_entrance', name: "Thornwick Ruins — Entrance", biome: 'dungeon',
+        levelRange: [15, 22],
+        description: 'Crumbling stone arches overtaken by twisted roots. Old magic still hums in the broken flagstones.',
+        exits: { west: 'thornwick_square', north: 'thornwick_ruins_f2' },
+        baseEncounterChance: 0.38,
+        safeZone: false, regenState: 'exploring',
+    },
+    thornwick_ruins_f2: {
+        id: 'thornwick_ruins_f2', name: "Thornwick Ruins — Floor 2", biome: 'dungeon',
+        levelRange: [16, 24],
+        description: 'Collapsed corridors and rubble-strewn halls. Shadows move at the edge of your torchlight.',
+        exits: { south: 'thornwick_ruins_entrance', north: 'thornwick_ruins_f3' },
+        baseEncounterChance: 0.42,
+        safeZone: false, regenState: 'exploring',
+    },
+    thornwick_ruins_f3: {
+        id: 'thornwick_ruins_f3', name: "Thornwick Ruins — Floor 3 (Boss)", biome: 'dungeon',
+        levelRange: [18, 26],
+        description: 'A grand hall with a vaulted ceiling. The Treant Ancient stands guard over a sacred grove of saplings in the center.',
+        exits: { south: 'thornwick_ruins_f2' },
+        baseEncounterChance: 0.50,
+        safeZone: false, regenState: 'exploring',
+    },
+    // Sunken Mines (Iron Gate region — north of Irongate, before the mines area)
+    sunken_mines_entrance: {
+        id: 'sunken_mines_entrance', name: "Sunken Mines — Entrance", biome: 'dungeon',
+        levelRange: [6, 14],
+        description: 'An abandoned mining shaft partially flooded with black water. Rusty carts sit half-submerged on corroded tracks.',
+        exits: { south: 'iron_gate_town_square', north: 'sunken_mines_f2', east: 'sunken_mines_f3' },
+        baseEncounterChance: 0.40,
+        safeZone: false, regenState: 'exploring',
+    },
+    sunken_mines_f2: {
+        id: 'sunken_mines_f2', name: "Sunken Mines — Floor 2", biome: 'dungeon',
+        levelRange: [7, 16],
+        description: 'Dripping caverns lined with dripping stalactites. The water here reaches waist height in places.',
+        exits: { south: 'sunken_mines_entrance', north: 'sunken_mines_f4' },
+        baseEncounterChance: 0.44,
+        safeZone: false, regenState: 'exploring',
+    },
+    sunken_mines_f3: {
+        id: 'sunken_mines_f3', name: "Sunken Mines — Floor 3", biome: 'dungeon',
+        levelRange: [8, 18],
+        description: 'A collapsed vein of iron ore opens into a deeper chamber. Something glints in the flooded floor.',
+        exits: { west: 'sunken_mines_entrance' },
+        baseEncounterChance: 0.45,
+        safeZone: false, regenState: 'exploring',
+    },
+    sunken_mines_f4: {
+        id: 'sunken_mines_f4', name: "Sunken Mines — Floor 4", biome: 'dungeon',
+        levelRange: [10, 20],
+        description: 'Deep shafts and rope bridges over flooded tunnels. The sound of groaning metal echoes from below.',
+        exits: { south: 'sunken_mines_f2', north: 'sunken_mines_f5' },
+        baseEncounterChance: 0.50,
+        safeZone: false, regenState: 'exploring',
+    },
+    sunken_mines_f5: {
+        id: 'sunken_mines_f5', name: "Sunken Mines — Floor 5 (Boss)", biome: 'dungeon',
+        levelRange: [12, 22],
+        description: 'A vast underground lake. The Mine Wyrm coils on a rocky island in the center, scales encrusted with gems and ore.',
+        exits: { south: 'sunken_mines_f4' },
+        baseEncounterChance: 0.58,
+        safeZone: false, regenState: 'exploring',
+    },
+    // Mirefen Catacombs (Mirefen region — north of Mirefen Swamp)
+    mirefen_catacombs_entrance: {
+        id: 'mirefen_catacombs_entrance', name: "Mirefen Catacombs — Entrance", biome: 'dungeon',
+        levelRange: [28, 38],
+        description: 'Ancient stone stairs descend into the wetland. Bones are embedded in the mortar. The smell of decay rises from below.',
+        exits: { south: 'mirefen_swamp', north: 'mirefen_catacombs_f2' },
+        baseEncounterChance: 0.42,
+        safeZone: false, regenState: 'exploring',
+    },
+    mirefen_catacombs_f2: {
+        id: 'mirefen_catacombs_f2', name: "Mirefen Catacombs — Floor 2", biome: 'dungeon',
+        levelRange: [29, 40],
+        description: 'Narrow corridors lined with niches, most empty, some not. A cold draft carries whispers.',
+        exits: { south: 'mirefen_catacombs_entrance', north: 'mirefen_catacombs_f3' },
+        baseEncounterChance: 0.45,
+        safeZone: false, regenState: 'exploring',
+    },
+    mirefen_catacombs_f3: {
+        id: 'mirefen_catacombs_f3', name: "Mirefen Catacombs — Floor 3 (Boss)", biome: 'dungeon',
+        levelRange: [30, 42],
+        description: 'A ceremonial burial chamber. The Lich Lord rises from a sarcophagus as you enter, deathly light emanating from hollow eye sockets.',
+        exits: { south: 'mirefen_catacombs_f2' },
+        baseEncounterChance: 0.52,
+        safeZone: false, regenState: 'exploring',
+    },
+    // Dragon's Lair (endgame — north of Cinderpeak)
+    dragons_lair_entrance: {
+        id: 'dragons_lair_entrance', name: "Dragon's Lair — Entrance", biome: 'dungeon',
+        levelRange: [65, 78],
+        description: 'A cave mouth wide enough to fly a dragon through. Scorch marks blacken the rock. The ground vibrates with slow, deep breathing.',
+        exits: { south: 'cinderpeak_square', north: 'dragons_lair_f2' },
+        baseEncounterChance: 0.50,
+        safeZone: false, regenState: 'exploring',
+    },
+    dragons_lair_f2: {
+        id: 'dragons_lair_f2', name: "Dragon's Lair — Floor 2", biome: 'dungeon',
+        levelRange: [68, 82],
+        description: 'Hoard rooms filled with mountains of gold and artifacts. Drakes sleep atop their personal piles.',
+        exits: { south: 'dragons_lair_entrance', north: 'dragons_lair_f3' },
+        baseEncounterChance: 0.54,
+        safeZone: false, regenState: 'exploring',
+    },
+    dragons_lair_f3: {
+        id: 'dragons_lair_f3', name: "Dragon's Lair — Floor 3", biome: 'dungeon',
+        levelRange: [72, 86],
+        description: 'The inner sanctum. Walls lined with the skulls of champions who fell before the dragon. Heat warps the air.',
+        exits: { south: 'dragons_lair_f2', north: 'dragons_lair_f4' },
+        baseEncounterChance: 0.58,
+        safeZone: false, regenState: 'exploring',
+    },
+    dragons_lair_f4: {
+        id: 'dragons_lair_f4', name: "Dragon's Lair — Floor 4", biome: 'dungeon',
+        levelRange: [76, 90],
+        description: 'The highest chamber. Natural light streams through a crack in the ceiling. The dragon waits on a dais of fused gold.',
+        exits: { south: 'dragons_lair_f3', north: 'dragons_lair_boss' },
+        baseEncounterChance: 0.62,
+        safeZone: false, regenState: 'exploring',
+    },
+    dragons_lair_boss: {
+        id: 'dragons_lair_boss', name: "Dragon's Lair — The Ancient Wyrm", biome: 'dungeon',
+        levelRange: [80, 95],
+        description: 'The Ancient Dragon unfurls from the dais. Its scales shimmer with molten gold. There is no escape. Only victory or death.',
+        exits: { south: 'dragons_lair_f4' },
+        baseEncounterChance: 0.75,
+        safeZone: false, regenState: 'exploring',
+    },
 };
 function getArea(id) {
     return exports.AREAS[id];
+}
+function isDungeonArea(areaId) {
+    const area = exports.AREAS[areaId];
+    return area?.biome === 'dungeon';
+}
+function isBossFloor(areaId) {
+    const area = exports.AREAS[areaId];
+    if (!area)
+        return false;
+    return area.name.toLowerCase().includes('boss') || area.name.toLowerCase().includes('ancient wyrm');
+}
+function getDungeonId(areaId) {
+    const area = exports.AREAS[areaId];
+    if (!area || area.biome !== 'dungeon')
+        return null;
+    // Extract dungeon name from area id prefix
+    const parts = areaId.split('_');
+    // e.g. goblin_warren_entrance -> goblin_warren
+    if (areaId.endsWith('_entrance'))
+        return parts.slice(0, -1).join('_');
+    if (areaId.includes('_f'))
+        return parts.slice(0, -1).join('_').replace(/_f\d+$/, '');
+    if (areaId.includes('_boss'))
+        return parts.slice(0, -1).join('_');
+    return parts.slice(0, -1).join('_');
+}
+// All cities available for fast travel (sorted by unlock order / level)
+exports.CITIES = [
+    { id: 'ashford_village_square', name: 'Ashford', minLevel: 1, tier: 1 },
+    { id: 'iron_gate_town_square', name: 'Irongate', minLevel: 5, tier: 1 },
+    { id: 'thornwick_square', name: 'Thornwick', minLevel: 10, tier: 2 },
+    { id: 'millhaven_square', name: 'Millhaven', minLevel: 10, tier: 2 },
+    { id: 'crystalmere_city_square', name: 'Crystalmere', minLevel: 18, tier: 3 },
+    { id: 'emberveil_square', name: 'Emberveil', minLevel: 25, tier: 3 },
+    { id: 'duskhollow_square', name: 'Duskhollow', minLevel: 30, tier: 4 },
+    { id: 'stormspire_citadel_square', name: 'Stormspire', minLevel: 40, tier: 4 },
+    { id: 'veilreach_square', name: 'Veilreach', minLevel: 50, tier: 5 },
+    { id: 'cinderpeak_square', name: 'Cinderpeak', minLevel: 55, tier: 5 },
+    { id: 'ashenmoor_square', name: 'Ashenmoor', minLevel: 60, tier: 5 },
+    { id: 'wraithgate_square', name: 'Wraithgate', tier: 6 },
+    { id: 'obsidian_keep_square', name: 'Obsidian Keep', tier: 6 },
+    { id: 'the_sanctum_square', name: 'The Sanctum', tier: 6 },
+];
+function getCityById(id) {
+    return exports.CITIES.find(c => c.id === id);
 }
 function describeArea(areaId) {
     const area = exports.AREAS[areaId];
     if (!area)
         return 'Unknown area.';
+    const isDungeon = area.biome === 'dungeon';
+    const isBossFloor = area.name.toLowerCase().includes('boss') || area.name.toLowerCase().includes('ancient wyrm');
     let out = `\n  ${area.name}  [Lv ${area.levelRange[0]}–${area.levelRange[1]}, ${area.biome}]`;
+    if (isBossFloor)
+        out += '  ⚔ BOSS FLOOR';
     out += '\n  ──────────────────────────────────────────────────────────';
     out += '\n  ' + area.description;
     out += '\n  ──────────────────────────────────────────────────────────';
@@ -462,6 +678,10 @@ function describeArea(areaId) {
     for (const [dir, target] of Object.entries(area.exits)) {
         const targetArea = exports.AREAS[target];
         out += `\n    [${dir}] ${targetArea?.name ?? target}`;
+    }
+    if (isDungeon) {
+        out += '\n  [DUNGEON] Use "enter" to explore this floor for encounters.';
+        out += '\n            Use "up" to go to previous floor, "down" to go deeper.';
     }
     if (area.baseEncounterChance > 0) {
         const pct = Math.round(area.baseEncounterChance * 100);

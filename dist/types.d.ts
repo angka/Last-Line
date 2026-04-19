@@ -77,7 +77,74 @@ export interface MagicSkill {
     description: string;
 }
 export type Element = 'fire' | 'ice' | 'thunder' | 'shadow' | 'light' | 'earth' | 'wind' | 'arcane' | 'void';
-export type SupportSkill = Record<string, never>;
+export interface SupportSkill {
+    id: string;
+    name: string;
+    level: number;
+    linkedKills: number;
+    manaCost: number;
+    targetType: 'ally' | 'self' | 'all_allies';
+    effectType: 'heal' | 'buff_stat' | 'cleanse' | 'shield' | 'revive';
+    effectValue: number;
+    duration?: number;
+    description: string;
+}
+export declare const SKILL_LEVEL_THRESHOLDS: number[];
+export declare function getNextSkillLevelThreshold(currentLevel: number): number;
+export type MaterialBiome = 'grassland' | 'forest' | 'deep_forest' | 'cave' | 'mountain' | 'swamp' | 'volcanic' | 'savanna' | 'coast' | 'dark_forest' | 'moor' | 'haunted' | 'void' | 'bamboo';
+export interface Material {
+    id: string;
+    name: string;
+    type: 'herb' | 'ore' | 'wood' | 'crystal' | 'monster_drop' | 'essence' | 'cloth' | 'bone';
+    biome: MaterialBiome[];
+    rarity: Rarity;
+    description: string;
+    stackable: boolean;
+}
+export interface GatheringNode {
+    nodeId: string;
+    nodeType: 'herb_patch' | 'mining_vein' | 'lumber_spot' | 'fungal_cluster' | 'water_source' | 'bone_pile';
+    verb: 'gather' | 'mine' | 'chop' | 'pick' | 'fill' | 'sift' | 'attune';
+    name: string;
+    position: string;
+    maxUses: number;
+    respawnMinutes: number;
+    lootTable: GatheringLootEntry[];
+    requiresTool: string | null;
+    minPlayerLevel: number;
+}
+export interface GatheringLootEntry {
+    itemId: string;
+    chance: number;
+    qtyMin: number;
+    qtyMax: number;
+}
+export interface CraftingRecipe {
+    id: string;
+    name: string;
+    outputItemId: string;
+    outputQty: number;
+    skillLevelRequired: number;
+    materials: CraftingMaterial[];
+    description: string;
+}
+export interface CraftingMaterial {
+    itemId: string;
+    qty: number;
+}
+export interface LootEntry {
+    itemId: string;
+    chance: number;
+    qtyMin: number;
+    qtyMax: number;
+    luckScaling: boolean;
+}
+export interface BossDropTable {
+    bossId: string;
+    guaranteed: LootEntry[];
+    exclusive: LootEntry[];
+    commonPool: LootEntry[];
+}
 export interface StatusEffect {
     id: string;
     name: string;
@@ -106,6 +173,7 @@ export interface SaveFile {
         unlockedDungeons: string[];
         defeatedBosses: string[];
         dungeonProgress: DungeonProgress[];
+        dungeonChests: DungeonChestLoot[];
     };
     pendingLoot: LootDrop[];
     socialPrefs: SocialPrefs;
@@ -114,6 +182,37 @@ export interface SaveFile {
 export interface DungeonProgress {
     dungeonId: string;
     currentFloor: number;
+    completed: boolean;
+    clearedFloors: number[];
+}
+export interface DungeonChestLoot {
+    areaId: string;
+    items: LootDrop[];
+    opened: boolean;
+}
+export interface DungeonDef {
+    id: string;
+    name: string;
+    entrance: string;
+    floors: DungeonFloor[];
+    bossId: string;
+    unlockArea: string;
+}
+export interface DungeonFloor {
+    floor: number;
+    areaId: string;
+    enemyCount: [number, number];
+    eliteChance: number;
+    bossFloor: boolean;
+}
+export interface ShopCatalog {
+    cityId: string;
+    items: string[];
+}
+export interface ShopItem {
+    itemId: string;
+    stock: number;
+    priceMultiplier: number;
 }
 export interface SocialPrefs {
     chatVisible: boolean;
@@ -148,6 +247,7 @@ export interface CombatParticipant {
     isPlayer?: boolean;
     playerId?: string;
     isElite?: boolean;
+    isBoss?: boolean;
     level?: number;
 }
 export interface CombatSession {

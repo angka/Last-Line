@@ -213,6 +213,32 @@ exports.ENEMIES = {
         maxHp: 3500, attack: 160, strength: 100, agility: 70, defense: 90,
         expReward: 10000, goldReward: 5000, element: 'arcane', dropTableId: 'archon_of_chaos_xerath',
     },
+    // ── Dungeon Bosses ─────────────────────────────────────────────────────────
+    goblin_chieftain: {
+        id: 'goblin_chieftain', name: 'Goblin Chieftain', level: 5, isBoss: true,
+        maxHp: 200, attack: 22, strength: 15, agility: 10, defense: 8,
+        expReward: 180, goldReward: 80, dropTableId: 'goblin_warren',
+    },
+    treant_ancient: {
+        id: 'treant_ancient', name: 'Treant Ancient', level: 22, isBoss: true,
+        maxHp: 650, attack: 48, strength: 35, agility: 12, defense: 22,
+        expReward: 900, goldReward: 350, element: 'earth', dropTableId: 'thornwick_ruins',
+    },
+    mine_wyrm: {
+        id: 'mine_wyrm', name: 'Mine Wyrm', level: 18, isBoss: true,
+        maxHp: 480, attack: 40, strength: 30, agility: 14, defense: 18,
+        expReward: 600, goldReward: 250, element: 'earth', dropTableId: 'sunken_mines',
+    },
+    lich_lord: {
+        id: 'lich_lord', name: 'Lich Lord Vexar', level: 36, isBoss: true,
+        maxHp: 1100, attack: 75, strength: 28, agility: 20, defense: 30,
+        expReward: 2200, goldReward: 900, element: 'shadow', dropTableId: 'mirefen_catacombs',
+    },
+    ancient_dragon: {
+        id: 'ancient_dragon', name: 'The Ancient Dragon', level: 85, isBoss: true,
+        maxHp: 4500, attack: 160, strength: 100, agility: 55, defense: 90,
+        expReward: 12000, goldReward: 6000, element: 'fire', dropTableId: 'dragons_lair',
+    },
     the_nameless_void: {
         id: 'the_nameless_void', name: 'The Nameless Void', level: 105, isBoss: true,
         maxHp: 5000, attack: 200, strength: 130, agility: 80, defense: 120,

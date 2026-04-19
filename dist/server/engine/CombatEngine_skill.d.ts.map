@@ -1,0 +1,1 @@
+{"version":3,"file":"CombatEngine_skill.d.ts","sourceRoot":"","sources":["../../../src/server/engine/CombatEngine_skill.ts"],"names":[],"mappings":"AAGA,wBAAgB,WAAW,CACzB,OAAO,EAAE,aAAa,EACtB,IAAI,EAAE,UAAU,GAAG,OAAO,GAAG,SAAS,EACtC,UAAU,EAAE,MAAM,EAClB,IAAI,EAAE,QAAQ,GACb;IAAE,OAAO,EAAE,aAAa,CAAC;IAAC,OAAO,EAAE,QAAQ,CAAC;IAAC,IAAI,EAAE,MAAM,CAAA;CAAE,CA4F7D"}

@@ -103,6 +103,7 @@ function createDefaultSave(playerName) {
             unlockedDungeons: [],
             defeatedBosses: [],
             dungeonProgress: [],
+            dungeonChests: [],
         },
         pendingLoot: [],
         socialPrefs: {

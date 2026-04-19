@@ -85,7 +85,104 @@ export interface MagicSkill {
 }
 
 export type Element = 'fire' | 'ice' | 'thunder' | 'shadow' | 'light' | 'earth' | 'wind' | 'arcane' | 'void';
-export type SupportSkill = Record<string, never>; // stub for Phase 4
+
+export interface SupportSkill {
+  id: string;
+  name: string;
+  level: number;
+  linkedKills: number;
+  manaCost: number;
+  targetType: 'ally' | 'self' | 'all_allies';
+  effectType: 'heal' | 'buff_stat' | 'cleanse' | 'shield' | 'revive';
+  effectValue: number;
+  duration?: number;
+  description: string;
+}
+
+// ─── Skill Level Thresholds ─────────────────────────────────────────
+
+export const SKILL_LEVEL_THRESHOLDS: number[] = [
+  0,   // Lv 1
+  10,  // Lv 2
+  25,  // Lv 3
+  50,  // Lv 4
+  100, // Lv 5
+  200, // Lv 6
+  400, // Lv 7
+  750, // Lv 8
+  1500,// Lv 9
+  3000,// Lv 10
+];
+
+export function getNextSkillLevelThreshold(currentLevel: number): number {
+  return SKILL_LEVEL_THRESHOLDS[currentLevel] ?? 3000;
+}
+
+// ─── Material & Crafting Types ──────────────────────────────────────
+
+export type MaterialBiome = 'grassland' | 'forest' | 'deep_forest' | 'cave' | 'mountain' | 'swamp' | 'volcanic' | 'savanna' | 'coast' | 'dark_forest' | 'moor' | 'haunted' | 'void' | 'bamboo';
+
+export interface Material {
+  id: string;
+  name: string;
+  type: 'herb' | 'ore' | 'wood' | 'crystal' | 'monster_drop' | 'essence' | 'cloth' | 'bone';
+  biome: MaterialBiome[];
+  rarity: Rarity;
+  description: string;
+  stackable: boolean;
+}
+
+export interface GatheringNode {
+  nodeId: string;
+  nodeType: 'herb_patch' | 'mining_vein' | 'lumber_spot' | 'fungal_cluster' | 'water_source' | 'bone_pile';
+  verb: 'gather' | 'mine' | 'chop' | 'pick' | 'fill' | 'sift' | 'attune';
+  name: string;
+  position: string;
+  maxUses: number;
+  respawnMinutes: number;
+  lootTable: GatheringLootEntry[];
+  requiresTool: string | null;
+  minPlayerLevel: number;
+}
+
+export interface GatheringLootEntry {
+  itemId: string;
+  chance: number;
+  qtyMin: number;
+  qtyMax: number;
+}
+
+export interface CraftingRecipe {
+  id: string;
+  name: string;
+  outputItemId: string;
+  outputQty: number;
+  skillLevelRequired: number;
+  materials: CraftingMaterial[];
+  description: string;
+}
+
+export interface CraftingMaterial {
+  itemId: string;
+  qty: number;
+}
+
+// ─── Loot Types ──────────────────────────────────────────────────────
+
+export interface LootEntry {
+  itemId: string;
+  chance: number;
+  qtyMin: number;
+  qtyMax: number;
+  luckScaling: boolean;
+}
+
+export interface BossDropTable {
+  bossId: string;
+  guaranteed: LootEntry[];
+  exclusive: LootEntry[];
+  commonPool: LootEntry[];
+}
 
 export interface StatusEffect {
   id: string;
@@ -119,6 +216,7 @@ export interface SaveFile {
     unlockedDungeons: string[];
     defeatedBosses: string[];
     dungeonProgress: DungeonProgress[];
+    dungeonChests: DungeonChestLoot[];
   };
   pendingLoot: LootDrop[];
   socialPrefs: SocialPrefs;
@@ -130,6 +228,12 @@ export interface DungeonProgress {
   currentFloor: number;
   completed: boolean;
   clearedFloors: number[];
+}
+
+export interface DungeonChestLoot {
+  areaId: string;
+  items: LootDrop[];
+  opened: boolean;
 }
 
 // ─── Dungeon Types ────────────────────────────────────────────────────────
@@ -202,6 +306,7 @@ export interface CombatParticipant {
   isPlayer?: boolean;
   playerId?: string;
   isElite?: boolean;
+  isBoss?: boolean;
   level?: number;
 }
 

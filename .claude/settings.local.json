@@ -7,7 +7,13 @@
       "Bash(echo \"Server started, PID: $!\")",
       "Bash(node -e ' *)",
       "Bash(node -e *)",
-      "Bash(node update_parser.js)"
+      "Bash(node update_parser.js)",
+      "Bash(xxd -l 20 \"C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\src\\\\server\\\\engine\\\\CombatEngine.ts\")",
+      "Bash(node)",
+      "Bash(node fix_combat.mjs)",
+      "Bash(node fix_combat.cjs)",
+      "Bash(echo \"exit $?\")",
+      "Bash(node fix_combat2.cjs)"
     ]
   }
 }

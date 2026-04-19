@@ -1,4 +1,5 @@
 import type { SaveFile, CombatSession, CombatParticipant, Enemy } from '../../types';
+export declare function generateBossEncounter(bossId: string): Enemy | null;
 export declare function generateEncounter(areaLevelRange: [number, number], playerLevel: number, groupSizeMin?: number, groupSizeMax?: number, eliteChance?: number): Enemy[];
 export declare function createCombatSession(save: SaveFile, enemies: Enemy[], areaId: string): CombatSession;
 export declare function playerAttack(session: CombatSession, targetIdx: number): CombatSession;
@@ -15,4 +16,9 @@ export declare function resolveVictory(save: SaveFile, session: CombatSession): 
 export declare function resolveDefeat(save: SaveFile): SaveFile;
 export declare function formatCombatState(session: CombatSession): string;
 export declare function formatCombatPrompt(session: CombatSession, playerHp: number, playerMaxHp: number, playerMana: number, playerMaxMana: number): string;
+export declare function playerSkill(session: CombatSession, type: 'physical' | 'magic' | 'support', skillIndex: number, save: SaveFile): {
+    session: CombatSession;
+    newSave: SaveFile;
+    text: string;
+};
 //# sourceMappingURL=CombatEngine.d.ts.map

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateBossEncounter = generateBossEncounter;
 exports.generateEncounter = generateEncounter;
 exports.createCombatSession = createCombatSession;
 exports.playerAttack = playerAttack;
@@ -13,10 +14,20 @@ exports.resolveVictory = resolveVictory;
 exports.resolveDefeat = resolveDefeat;
 exports.formatCombatState = formatCombatState;
 exports.formatCombatPrompt = formatCombatPrompt;
+exports.playerSkill = playerSkill;
 const enemies_1 = require("../../data/enemies");
+const skills_1 = require("../../data/skills");
+const dungeons_1 = require("../../data/dungeons");
 const PlayerEngine_1 = require("./PlayerEngine");
+const LootEngine_1 = require("./LootEngine");
 const uuid_1 = require("uuid");
 // ─── Encounter Generation ───────────────────────────────────────────────────
+function generateBossEncounter(bossId) {
+    const boss = enemies_1.ENEMIES[bossId];
+    if (!boss || !boss.isBoss)
+        return null;
+    return boss;
+}
 function generateEncounter(areaLevelRange, playerLevel, groupSizeMin = 1, groupSizeMax = 2, eliteChance = 0.08) {
     const pool = Object.values(enemies_1.ENEMIES).filter(e => !e.isBoss && e.level >= areaLevelRange[0] && e.level <= areaLevelRange[1]);
     if (pool.length === 0)
@@ -216,14 +227,13 @@ function advanceTurn(session) {
     }
     return { ...session, turnIndex, round };
 }
-// ─── Loot & Rewards ───────────────────────────────────────────────────────
+// ─── Loot & Rewards ────────────────────────────────────────────────────────
 function resolveVictory(save, session) {
     const enemies = session.participants.filter(p => p.type === 'enemy');
     let s = { ...save, stats: { ...save.stats } };
     // Aggregate rewards
     let totalExp = 0;
     let totalGold = 0;
-    const drops = [];
     for (const enemy of enemies) {
         totalExp += (0, enemies_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_'))?.expReward
             ?? (0, enemies_1.getEnemy)(enemy.id)?.expReward ?? 0;
@@ -237,24 +247,40 @@ function resolveVictory(save, session) {
         s.stats = (0, PlayerEngine_1.levelUp)({ ...s.stats });
         levelUps.push(`  ★ LEVEL UP! You are now level ${s.stats.level}!`);
     }
-    // Simple drop roll (Phase 4 will expand loot tables)
-    for (const enemy of enemies) {
-        const enemyDef = (0, enemies_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_')) ?? (0, enemies_1.getEnemy)(enemy.id);
-        if (!enemyDef)
-            continue;
-        // Drop some gold
-        if (Math.random() < 0.5) {
-            const bonusGold = Math.floor(enemyDef.goldReward * 0.3 * Math.random());
-            s.stats = { ...s.stats, gold: s.stats.gold + bonusGold };
+    // Determine dungeon context for loot
+    const dungeonInfo = (0, dungeons_1.getDungeonForArea)(session.areaId);
+    const dungeonTier = dungeonInfo ? (0, LootEngine_1.getDungeonTier)(dungeonInfo.id) : 1;
+    const isBossKill = enemies.some(e => e.isBoss);
+    // Roll loot
+    const lootDrops = [];
+    if (isBossKill) {
+        const bossId = enemies.find(e => e.isBoss)?.id ?? '';
+        lootDrops.push(...(0, LootEngine_1.rollBossLoot)(bossId, s.stats.luck, s.worldState.defeatedBosses));
+        lootDrops.push(...(0, LootEngine_1.rollScrollDrops)(dungeonTier, s.stats.luck));
+    }
+    else {
+        const avgLevel = enemies.reduce((a, e) => a + (e.level ?? 1), 0) / Math.max(1, enemies.length);
+        lootDrops.push(...(0, LootEngine_1.rollRegularLoot)(s.stats.luck, avgLevel));
+        if (Math.random() < 0.05) {
+            lootDrops.push(...(0, LootEngine_1.rollScrollDrops)(dungeonTier, s.stats.luck));
         }
     }
-    let lines = `\n  ╔══════════════════════════════════════════════════════╗`;
-    lines += `\n  ║  VICTORY!                                           ║`;
-    lines += `\n  ╠══════════════════════════════════════════════════════╣`;
-    lines += `\n  ║  +${String(totalExp).padStart(6)} EXP   +${String(totalGold).padStart(6)} Gold                ║`;
-    lines += `\n  ╚══════════════════════════════════════════════════════╝`;
+    // Gold bonus
+    if (Math.random() < 0.5) {
+        const bonusGold = Math.floor((totalGold * 0.3) * (0.5 + Math.random()));
+        s.stats = { ...s.stats, gold: s.stats.gold + bonusGold };
+    }
+    // Merge loot
+    s.pendingLoot = (0, LootEngine_1.addLootToPending)(s.pendingLoot, lootDrops);
+    let lines = `
+  ╔══════════════════════════════════════════════════════╗
+  ║  VICTORY!                                           ║
+  ╠══════════════════════════════════════════════════════╣
+  ║  +${String(totalExp).padStart(6)} EXP   +${String(totalGold).padStart(6)} Gold                ║
+  ╚══════════════════════════════════════════════════════╝`;
     if (levelUps.length)
         lines += '\n' + levelUps.join('\n');
+    lines += (0, LootEngine_1.formatLootDrops)(lootDrops);
     return s;
 }
 function resolveDefeat(save) {
@@ -307,5 +333,95 @@ function formatCombatPrompt(session, playerHp, playerMaxHp, playerMana, playerMa
     return `\n${enemyList}\n` +
         `[Your turn! 15s] HP: ${playerHp}/${playerMaxHp} | MP: ${playerMana}/${playerMaxMana}\n` +
         `  Choose: attack <n> / magic <n> / skill <n> / item <n> / flee`;
+}
+// ─── Skill in Combat ──────────────────────────────────────────────────────────
+function playerSkill(session, type, skillIndex, save) {
+    const participant = session.participants[session.turnIndex];
+    if (participant.type !== 'player') {
+        return { session, newSave: save, text: 'Not your turn.' };
+    }
+    let skill;
+    if (type === 'physical') {
+        skill = save.skills.physical[skillIndex];
+    }
+    else if (type === 'magic') {
+        skill = save.skills.magic[skillIndex];
+    }
+    else {
+        skill = save.skills.support[skillIndex];
+    }
+    if (!skill) {
+        return { session, newSave: save, text: 'Skill not found.' };
+    }
+    const manaCost = (0, skills_1.getSkillManaCost)(skill.level, skill.manaCost);
+    const damageMultiplier = (0, skills_1.getSkillLevelMultiplier)(skill.level);
+    let s = save;
+    const enemies = session.participants.filter(p => p.type === 'enemy' && p.hp > 0);
+    const targetIdx = 0;
+    if (targetIdx < 0 || targetIdx >= enemies.length) {
+        return { session, newSave: save, text: 'No valid target.' };
+    }
+    const target = enemies[targetIdx];
+    let log = [...session.log];
+    let updatedSession = session;
+    if (type === 'physical' || type === 'magic') {
+        const magicSkill = skill;
+        let baseDamage = skill.baseDamage ?? magicSkill.baseDamage;
+        baseDamage = Math.floor(baseDamage * damageMultiplier);
+        const scalingStat = magicSkill.scalingStat === 'mana' ? s.stats.mana : s.stats.strength;
+        let raw = baseDamage * (1 + scalingStat / 100);
+        const crit = Math.random() < s.stats.critRate;
+        const mitigated = raw * (1 - target.defense / (target.defense + 200));
+        const final = crit ? mitigated * s.stats.critDamage : mitigated;
+        const dodge = Math.random() < target.agility / (target.agility + 150);
+        const damage = dodge ? 0 : Math.max(1, Math.floor(final));
+        target.hp -= damage;
+        const critTag = crit ? ' CRITICAL!' : '';
+        const dodgeTag = dodge ? ' MISS!' : '';
+        const skillName = skill.name;
+        const elementTag = magicSkill.element ? '[' + magicSkill.element + ']' : '';
+        log.push({ round: session.round, text: participant.name + ' uses ' + skillName + elementTag + ' on ' + target.name + ' -> ' + damage + ' damage!' + critTag + dodgeTag });
+        updatedSession = { ...session, log, participants: [...session.participants] };
+        s = { ...s, stats: { ...s.stats, mana: s.stats.mana - manaCost } };
+    }
+    else {
+        const supportSkill = skill;
+        let text = '';
+        if (supportSkill.effectType === 'heal') {
+            const healAmount = Math.floor(supportSkill.effectValue * damageMultiplier);
+            participant.hp = Math.min(participant.maxHp, participant.hp + healAmount);
+            text = participant.name + ' uses ' + skill.name + ' -> healed ' + healAmount + ' HP!';
+        }
+        else if (supportSkill.effectType === 'buff_stat') {
+            text = participant.name + ' uses ' + skill.name + ' -> +' + supportSkill.effectValue + ' to ally for ' + (supportSkill.duration ?? 3) + ' turns!';
+        }
+        else if (supportSkill.effectType === 'cleanse') {
+            participant.statusEffects = [];
+            text = participant.name + ' uses ' + skill.name + ' -> cleansed all debuffs!';
+        }
+        else {
+            text = participant.name + ' uses ' + skill.name + '!';
+        }
+        log.push({ round: session.round, text });
+        updatedSession = { ...session, log, participants: [...session.participants] };
+        s = { ...s, stats: { ...s.stats, mana: s.stats.mana - manaCost } };
+    }
+    updatedSession = enemyTurn(updatedSession);
+    updatedSession = tickStatusEffects(updatedSession);
+    updatedSession = checkVictory(updatedSession);
+    if (updatedSession.winner === 'player') {
+        const newSave = resolveVictory(s, updatedSession);
+        return { session: updatedSession, newSave, text: formatCombatState(updatedSession) + '\n  Victory!' };
+    }
+    if (updatedSession.winner === 'enemy') {
+        const newSave = resolveDefeat(s);
+        return { session: updatedSession, newSave: newSave, text: formatCombatState(updatedSession) + '\n  You have been defeated...' };
+    }
+    updatedSession = advanceTurn(updatedSession);
+    return {
+        session: updatedSession,
+        newSave: s,
+        text: formatCombatState(updatedSession) + '\n' + formatCombatPrompt(updatedSession, s.stats.hp, s.stats.maxHp, s.stats.mana, s.stats.maxMana),
+    };
 }
 //# sourceMappingURL=CombatEngine.js.map

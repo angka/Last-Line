@@ -11,17 +11,36 @@ import { formatCraftingMenu, listCraftableItems, craftItem, gatherFromNode, form
 import { getDungeonChestLoot, formatLootDrops } from '../engine/LootEngine';
 import { getDungeonForArea, getDungeonFloor, getNextFloorArea, getPrevFloorArea } from '../../data/dungeons';
 import { generateBossEncounter } from '../engine/CombatEngine';
+import { presenceManager } from '../social/PresenceManager';
+import { partyManager } from '../social/PartyManager';
+import { tradeManager } from '../social/TradeManager';
+import { getPartyCombat } from '../engine/PartyCombatManager';
+
+export interface PushMessage {
+  channel: string;
+  text: string;
+  /** If set, broadcast to this area instead of the sender's current area */
+  areaId?: string;
+  /** Exclude the sender from the broadcast */
+  excludeSelf?: boolean;
+}
 
 export interface ParseResult {
   text: string;
   newSave?: SaveFile;
   combatState?: any;
   menuState?: any;
-  action?: 'quit' | 'save' | 'none' | 'levelup';
+  action?: 'quit' | 'save' | 'none' | 'levelup' | 'party_encounter';
   levelUps?: string[];
+  pushMessages?: PushMessage[];
+  partyEncounter?: {
+    partyId: string;
+    areaId: string;
+    enemies: any[];
+  };
 }
 
-export function parseCommand(cmd: string, save: SaveFile, combatState?: any): ParseResult {
+export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): ParseResult {
   const parts = cmd.trim().split(/\s+/);
   const verb = parts[0]?.toLowerCase();
   const args = parts.slice(1);
@@ -224,10 +243,71 @@ export function parseCommand(cmd: string, save: SaveFile, combatState?: any): Pa
     // ── Pending Loot ─────────────────────────────────────────────────────
     case 'loot':
     case 'pending_loot': {
-      return handlePendingLoot(save);
+      return handlePendingLoot(save, args);
     }
     case 'chest': {
       return handleDungeonChest(save);
+    }
+
+    // ── Social: who / nearby ─────────────────────────────────────────────
+    case 'who':
+    case 'nearby': {
+      return handleWho(save);
+    }
+
+    // ── Social: Chat ─────────────────────────────────────────────────────
+    case 'say': {
+      const text = args.join(' ');
+      if (!text) return { text: 'Say what? Usage: say <text>' };
+      return handleAreaChat(text, save);
+    }
+    case 'p':
+    case 'party_chat': {
+      const text = args.join(' ');
+      if (!text) return { text: 'Party chat what? Usage: p <text>' };
+      return handlePartyChat(text, save);
+    }
+    case 'msg':
+    case 'whisper': {
+      if (args.length < 2) return { text: 'Usage: msg <player> <text>' };
+      const target = args[0];
+      const text = args.slice(1).join(' ');
+      return handleWhisper(target, text, save);
+    }
+    case 'shout': {
+      const text = args.join(' ');
+      if (!text) return { text: 'Shout what? Usage: shout <text>' };
+      return handleShout(text, save);
+    }
+
+    // ── Social: Party ─────────────────────────────────────────────────────
+    case 'party': {
+      return handleParty(args, save);
+    }
+
+    // ── Social: Trade ─────────────────────────────────────────────────────
+    case 'trade': {
+      return handleTrade(args, save);
+    }
+
+    // ── Party Combat ───────────────────────────────────────────────────────────
+    case 'party_start': {
+      return handlePartyStart(save);
+    }
+    case 'revive': {
+      return handleRevive(args, save);
+    }
+    case 'heal': {
+      return handlePartyHeal(args, save);
+    }
+    case 'buff': {
+      return handlePartyBuff(args, save);
+    }
+    case 'share_loot': {
+      return handleShareLoot(args, save);
+    }
+    case 'pvp': {
+      return handlePvp(args, save);
     }
 
     default: {
@@ -275,6 +355,7 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
       unlockedDungeons: newUnlockedDungeons,
     },
     regenState: target?.safeZone ? 'city' : 'exploring',
+    pvp: { ...save.pvp, safeZone: target?.safeZone ?? false },
   };
 
   const unlockMsg = (!alreadyUnlockedCity && isCity)
@@ -290,6 +371,27 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
         1, 2, 0.08,
       );
       if (enemies.length > 0) {
+        // Check if auto-party-combat should trigger
+        if (save.partyId) {
+          const areaPlayers = presenceManager.getPlayersInArea(targetId);
+          const partyMembers = areaPlayers.filter(p =>
+            partyManager.isInParty(p.playerId) &&
+            partyManager.getPartyOf(p.playerId)?.partyId === save.partyId,
+          );
+          if (partyMembers.length >= 2) {
+            return {
+              text: `${describeArea(targetId)}\n\n  ⚔ PARTY COMBAT — ${enemies.length} enemies appear!\n  All co-located party members enter combat together.\n  Use "attack <n>", "skill <t> <n>", "magic <n>", "heal <ally>", "buff <ally>", "flee", "log".`,
+              newSave,
+              action: 'party_encounter',
+              pushMessages: [
+                { channel: 'departure', areaId: save.worldState.currentArea, text: `[Nearby] ${save.stats.name} has left.`, excludeSelf: true },
+                { channel: 'arrival', areaId: targetId, text: `[Nearby] ${save.stats.name} has entered the area.`, excludeSelf: false },
+                { channel: 'area', areaId: targetId, text: `[Combat] ⚔ ${save.stats.name} triggered party combat!`, excludeSelf: false },
+              ],
+              partyEncounter: { partyId: save.partyId, areaId: targetId, enemies },
+            };
+          }
+        }
         const session = createCombatSession(newSave, enemies, targetId);
         return {
           text: `${describeArea(targetId)}\n\n  ENCOUNTER! ${enemies.map(e => e.name).join(', ')} blocks your path!\n${formatCombatState(session)}\n${formatCombatPrompt(session, newSave.stats.hp, newSave.stats.maxHp, newSave.stats.mana, newSave.stats.maxMana)}`,
@@ -308,6 +410,12 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
   return {
     text: describeArea(targetId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${regenStateLabel(newSave.regenState)}]${floorNote}${unlockMsg}`,
     newSave,
+    pushMessages: [
+      // Departure from old area (client hasn't switched areas yet)
+      { channel: 'departure', areaId: save.worldState.currentArea, text: `[Nearby] ${save.stats.name} has left.`, excludeSelf: true },
+      // Arrival in new area
+      { channel: 'arrival', areaId: targetId, text: `[Nearby] ${save.stats.name} has entered the area.`, excludeSelf: false },
+    ],
   };
 }
 
@@ -450,6 +558,7 @@ function handleTravel(cityName: string | undefined, save: SaveFile): ParseResult
       currentCity: target.id,
     },
     regenState: 'city',
+    pvp: { ...save.pvp, safeZone: true },
   };
 
   return {
@@ -854,6 +963,37 @@ function formatHelp(): string {
     item <n>                — use consumable during combat
     log                     — show combat log
 
+  SOCIAL
+    who / nearby            — see players in your area
+    say <text>             — chat to players in your area
+    p <text>               — party chat (must be in a party)
+    msg <name> <text>       — whisper another player
+    shout <text>           — server-wide (60s cooldown)
+    party [info]           — show party members
+    party invite <name>    — invite a player to party
+    party leave            — leave your party
+    party disband          — leader: disband party
+    party kick <name>      — leader: kick a member
+    party accept/decline   — respond to party invite
+
+  PARTY COMBAT
+    party_start            — start shared party combat (min 2 members same area)
+    attack <n>             — attack enemy n (shared turn order)
+    flee                   — party flee attempt
+    heal <ally>            — heal a party member (during your turn)
+    buff <ally>            — buff a party member (during your turn)
+    revive <name>          — revive downed ally (50 MP)
+    log                    — show party combat status
+
+  TRADE
+    trade offer <player> "<item>" <price>
+                          — offer item for gold to a player
+    trade view             — view active trade
+    trade accept           — buyer: accept offer
+    trade confirm          — seller: complete trade
+    trade counter <price>  — counter-offer
+    trade decline/cancel   — cancel trade
+
   SYSTEM
     save                    — save game (at Inn)
     help                    — show this help
@@ -1131,3 +1271,561 @@ function formatAreaNodesDisplay(areaId: string): string {
   }
   return lines.join('\n');
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PHASE 5 — MULTIPLAYER COMBAT & TURN TIMER
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Start Party Combat ───────────────────────────────────────────────────────
+
+function handlePartyStart(save: SaveFile): ParseResult {
+  if (!save.partyId) {
+    return { text: 'You must be in a party to start party combat. Use "party invite <name>" first.' };
+  }
+
+  // Check if already in combat
+  const existing = getPartyCombat(save.partyId);
+  if (existing) {
+    return { text: 'Your party is already in combat!' };
+  }
+
+  // Players must be in same area for party combat
+  const areaId = save.worldState.currentArea;
+  const areaPlayers = presenceManager.getPlayersInArea(areaId);
+  const partyMembers = areaPlayers.filter(p => partyManager.isInParty(p.playerId) && partyManager.getPartyOf(p.playerId)?.partyId === save.partyId);
+
+  if (partyMembers.length < 2) {
+    return { text: 'You need at least 2 party members in the same area to start party combat.' };
+  }
+
+  // Trigger combat start via server (this returns a stub — actual start is in index.ts)
+  return {
+    text: `  ⚔ Party combat starting...\n  Enemies appear! All party members will enter combat together.\n  Use "attack <n>", "flee", "heal <name>", "buff <name>", or "log" during combat.\n  NOTE: Start combat by having any party member explore or encounter enemies.`,
+  };
+}
+
+// ─── Revive downed ally ───────────────────────────────────────────────────────
+
+function handleRevive(args: string[], save: SaveFile): ParseResult {
+  if (!save.partyId) {
+    return { text: 'You must be in a party to revive a downed ally.' };
+  }
+
+  const targetName = args[0];
+  if (!targetName) {
+    // List downed members
+    const party = partyManager.getPartyOf(save.playerId);
+    if (!party) return { text: 'Party not found.' };
+    const downed = party.members.filter(m => m.isDowned);
+    if (downed.length === 0) return { text: 'No downed party members.' };
+
+    const lines = ['  ══════════ DOWED MEMBERS ══════════'];
+    for (const m of downed) {
+      lines.push(`  ${m.playerName} — [DOWNED]`);
+    }
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  Use "revive <name>" to attempt revival.');
+    return { text: lines.join('\n') };
+  }
+
+  // Find target
+  const targetSession = presenceManager.getSessionByPlayerName(targetName);
+  if (!targetSession) return { text: `Player "${targetName}" is not online.` };
+
+  const manaCost = 50;
+  if (save.stats.mana < manaCost) {
+    return { text: `Not enough mana to revive. Reviving costs ${manaCost} MP, you have ${save.stats.mana} MP.` };
+  }
+
+  const targetPartyId = targetSession.currentState.partyId;
+  if (targetPartyId !== save.partyId) {
+    return { text: `${targetName} is not in your party.` };
+  }
+
+  const newSave: SaveFile = {
+    ...save,
+    stats: { ...save.stats, mana: save.stats.mana - manaCost },
+  };
+
+  return {
+    text: `  ✚ You begin the revival ritual on ${targetName}...\n  The resurrection requires a support skill or waiting for combat to end.\n  (Mana: -${manaCost})`,
+    newSave,
+  };
+}
+
+// ─── Party Heal ───────────────────────────────────────────────────────────────
+
+function handlePartyHeal(args: string[], save: SaveFile): ParseResult {
+  if (!save.partyId) {
+    return { text: 'You must be in a party to heal an ally.' };
+  }
+
+  const targetName = args[0];
+  if (!targetName) {
+    // Show party members with HP
+    const party = partyManager.getPartyOf(save.playerId);
+    if (!party) return { text: 'Party not found.' };
+
+    const lines = ['  ══════════ PARTY HP ══════════'];
+    for (const m of party.members) {
+      const hpPct = Math.round((m.hp / m.maxHp) * 100);
+      const bar = '[' + '█'.repeat(Math.round(hpPct / 10)) + '░'.repeat(10 - Math.round(hpPct / 10)) + ']';
+      lines.push(`  ${m.playerName.padEnd(14)} HP: ${String(m.hp).padStart(4)}/${m.maxHp} ${bar}`);
+    }
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  Use "heal <name>" to heal an ally with a support skill.');
+    return { text: lines.join('\n') };
+  }
+
+  // Check if target is in same area
+  const targetSession = presenceManager.getSessionByPlayerName(targetName);
+  if (!targetSession) return { text: `Player "${targetName}" is not online.` };
+  if (targetSession.currentState.worldState.currentArea !== save.worldState.currentArea) {
+    return { text: `${targetName} is not in your area. Move to the same area first.` };
+  }
+
+  return {
+    text: `  Use "skill support <n>" during your turn in party combat to heal ${targetName}.\n  Available support healing skills: healing_touch, healing_light, greater_heal, full_restore`,
+  };
+}
+
+// ─── Party Buff ────────────────────────────────────────────────────────────────
+
+function handlePartyBuff(args: string[], save: SaveFile): ParseResult {
+  if (!save.partyId) {
+    return { text: 'You must be in a party to buff an ally.' };
+  }
+
+  const targetName = args[0];
+  if (!targetName) {
+    const lines = ['  ══════════ PARTY BUFFS ══════════', '  Support buff skills:'];
+    const supportSkills = save.skills.support;
+    if (supportSkills.length === 0) {
+      lines.push('  (no support skills learned — find buff scrolls in dungeons)');
+    } else {
+      supportSkills.forEach((sk, i) => {
+        lines.push(`    [${i+1}] ${sk.name} — ${sk.effectType} (+${sk.effectValue} for ${sk.duration ?? 3} turns)`);
+      });
+    }
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  Use "skill support <n>" during your turn to buff an ally.');
+    return { text: lines.join('\n') };
+  }
+
+  return {
+    text: `  Use "skill support <n>" during your turn in party combat to buff ${targetName}.\n  Available support buffs: haste, iron_guard, empower, arcane_infuse`,
+  };
+}
+
+// ─── Share Loot (Party) ────────────────────────────────────────────────────────
+
+function handleShareLoot(args: string[], save: SaveFile): ParseResult {
+  if (!save.partyId) {
+    return { text: 'You must be in a party to share loot. Use "pending_loot" to claim your own loot.' };
+  }
+
+  const loot = save.pendingLoot;
+  if (loot.length === 0) {
+    return { text: 'You have no pending loot to share.' };
+  }
+
+  const subcmd = args[0]?.toLowerCase();
+  if (!subcmd || subcmd === 'list') {
+    const lines = ['  ══════════ PENDING LOOT ══════════'];
+    loot.forEach((drop, i) => {
+      const item = getItem(drop.itemId);
+      const qty = drop.quantity > 1 ? ` x${drop.quantity}` : '';
+      const col = item ? rarityColor(item.rarity) : '';
+      const r = RARITY_RESET;
+      lines.push(`  [${i+1}] ${col}${drop.name}${r}${qty}  (${drop.rarity})`);
+    });
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  pending_loot claim   — claim all to your inventory');
+    lines.push('  share_loot give <n> <player> — give item n to party member');
+    return { text: lines.join('\n') };
+  }
+
+  if (subcmd === 'give' || subcmd === 'share') {
+    const itemIdx = parseInt(args[1] ?? '') - 1;
+    const targetName = args[2];
+    if (isNaN(itemIdx) || itemIdx < 0 || itemIdx >= loot.length) {
+      return { text: 'Invalid item number. Use "share_loot list" to see your loot.' };
+    }
+    if (!targetName) {
+      return { text: 'Usage: share_loot give <item-n> <player-name>' };
+    }
+
+    const targetSession = presenceManager.getSessionByPlayerName(targetName);
+    if (!targetSession) return { text: `Player "${targetName}" is not online.` };
+    if (targetSession.playerId === save.playerId) return { text: 'You cannot share loot with yourself.' };
+    if (targetSession.currentState.partyId !== save.partyId) {
+      return { text: `${targetName} is not in your party.` };
+    }
+
+    const drop = loot[itemIdx];
+    if (drop.itemId === 'gold') {
+      const shareAmount = Math.floor(drop.quantity / 2);
+      const newSave: SaveFile = {
+        ...save,
+        stats: { ...save.stats, gold: save.stats.gold - shareAmount },
+        pendingLoot: save.pendingLoot.filter((_, i) => i !== itemIdx),
+      };
+      const targetGold = targetSession.currentState.stats.gold + shareAmount;
+      targetSession.currentState = {
+        ...targetSession.currentState,
+        stats: { ...targetSession.currentState.stats, gold: targetGold },
+      };
+      return {
+        text: `  You shared ${shareAmount}g with ${targetName}. (Half of your gold loot)`,
+        newSave,
+      };
+    }
+
+    // Give item — add directly to target's inventory, remove from pendingLoot
+    const { inventoryAdd: ia } = require('../items/InventoryManager');
+    const dropItem = getItem(drop.itemId);
+    if (dropItem) {
+      const result = ia(targetSession.currentState, drop.itemId, drop.quantity);
+      targetSession.currentState = result.save;
+    }
+    const newSave3 = { ...save, pendingLoot: save.pendingLoot.filter((_, i) => i !== itemIdx) };
+    return {
+      text: `  You gave ${drop.name} to ${targetName}.`,
+      newSave: newSave3,
+    };
+  }
+
+  return { text: 'Usage: share_loot [list|give <n> <player>]' };
+}
+
+// ─── PvP ───────────────────────────────────────────────────────────────────────────
+
+function handlePvp(args: string[], save: SaveFile): ParseResult {
+  const subcmd = args[0]?.toLowerCase();
+  const area = getArea(save.worldState.currentArea);
+
+  if (!subcmd || subcmd === 'status') {
+    const lines = ['  ══════════ PvP STATUS ══════════'];
+    lines.push(`  PvP Mode:     ${save.pvp.enabled ? '[ON] — You can attack and be attacked' : '[OFF] — You are safe'}`);
+    lines.push(`  Current Area: ${save.pvp.safeZone ? '[SAFE] PvP is disabled here' : '[PvP ZONE] PvP is enabled here'}`);
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  pvp on        — enable PvP (you can attack and be attacked)');
+    lines.push('  pvp off       — disable PvP (safe from other players)');
+    lines.push('  pvp area      — check current area PvP status');
+    lines.push('  ─────────────────────────────────────');
+    lines.push('  NOTE: Safe zones (city squares) always block PvP.');
+    return { text: lines.join('\n') };
+  }
+
+  if (subcmd === 'on') {
+    if (save.pvp.safeZone) {
+      return { text: 'You cannot enable PvP in a safe zone. Leave the city square first.' };
+    }
+    const newSave: SaveFile = { ...save, pvp: { ...save.pvp, enabled: true } };
+    return {
+      text: `  ⚔ PvP ENABLED. Other players can now attack you.\n  You can attack other players who have PvP enabled.\n  Type "pvp off" to return to safe mode.`,
+      newSave,
+    };
+  }
+
+  if (subcmd === 'off') {
+    const newSave: SaveFile = { ...save, pvp: { ...save.pvp, enabled: false } };
+    return {
+      text: `  🛡 PvP DISABLED. You are now safe from other players.\n  You cannot attack other players while PvP is off.\n  Type "pvp on" to enable PvP.`,
+      newSave,
+    };
+  }
+
+  if (subcmd === 'area') {
+    const safeTag = area?.safeZone ? '[SAFE ZONE]' : '[PvP ZONE]';
+    return {
+      text: `  Current area: ${area?.name ?? save.worldState.currentArea}\n  ${safeTag} ${area?.safeZone ? 'PvP is blocked here.' : 'PvP is allowed here.'}`,
+    };
+  }
+
+  return { text: 'Usage: pvp [on|off|status|area]' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PHASE 4 — SOCIAL & MULTIPLAYER HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Who / Nearby ─────────────────────────────────────────────────────────────
+
+function handleWho(save: SaveFile): ParseResult {
+  const areaId = save.worldState.currentArea;
+  const players = presenceManager.getPlayersInArea(areaId);
+
+  if (players.length === 0) {
+    return { text: 'You are alone here.' };
+  }
+
+  const areaName = getArea(areaId)?.name ?? areaId;
+  const lines = [
+    `  Players in ${areaName} (${players.length} online):`,
+    `  ${'─'.repeat(44)}`,
+  ];
+
+  for (const p of players) {
+    const col = p.playerName === save.stats.name ? '\x1b[1m' : '';
+    const reset = p.playerName === save.stats.name ? '\x1b[0m' : '';
+    const partyTag = partyManager.isInParty(p.playerId) ? ' [Party]' : '';
+    lines.push(`  ${col}${p.playerName.padEnd(14)} Lv ${String(p.level).padStart(2)}   [${p.activity}]${partyTag}${reset}`);
+  }
+
+  lines.push(`  ${'─'.repeat(44)}`);
+  lines.push(`  Type 'msg <name> <text>' to whisper.`);
+  lines.push(`  Type 'party invite <name>' to invite to a party.`);
+
+  return { text: lines.join('\n') };
+}
+
+// ─── Area Chat ────────────────────────────────────────────────────────────────
+
+function handleAreaChat(text: string, save: SaveFile): ParseResult {
+  const areaId = save.worldState.currentArea;
+  presenceManager.broadcastToArea(areaId, `[Area] ${save.stats.name}: ${text}`, save.playerId);
+  return { text: `[You]: ${text}` };
+}
+
+// ─── Party Chat ───────────────────────────────────────────────────────────────
+
+function handlePartyChat(text: string, save: SaveFile): ParseResult {
+  if (!save.partyId) return { text: 'You are not in a party. Use "party invite <name>" to form one.' };
+  partyManager.syncMember(save.playerId);
+  partyManager.notifyAllMembers(save.partyId, `[Party] ${save.stats.name}: ${text}`, save.playerId);
+  return { text: `[Party]: ${text}` };
+}
+
+// ─── Whisper ─────────────────────────────────────────────────────────────────
+
+function handleWhisper(targetName: string, text: string, save: SaveFile): ParseResult {
+  if (!text) return { text: 'Usage: msg <player> <text>' };
+  const targetSession = presenceManager.getSessionByPlayerName(targetName);
+  if (!targetSession) return { text: `Player "${targetName}" is not online.` };
+
+  // Deliver to target
+  presenceManager.broadcastToPlayer(targetSession.playerId, `[Whisper from ${save.stats.name}]: ${text}`);
+  return { text: `[Whisper to ${targetName}]: ${text}` };
+}
+
+// ─── Shout ───────────────────────────────────────────────────────────────────
+
+function handleShout(text: string, save: SaveFile): ParseResult {
+  if (!text) return { text: 'Usage: shout <text>' };
+  // shout is routed through server/index.ts chat handler with channel=shout
+  presenceManager.broadcastToAll(`[Shout] ${save.stats.name}: ${text}`, save.playerId);
+  return { text: `[Shout]: ${text} [60s cooldown]` };
+}
+
+// ─── Party ────────────────────────────────────────────────────────────────────
+
+function handleParty(args: string[], save: SaveFile): ParseResult {
+  const subcmd = args[0]?.toLowerCase();
+
+  // No args → show info
+  if (!subcmd || subcmd === 'info') {
+    if (!save.partyId) return { text: 'You are not in a party. Use "party invite <name>" to create one.' };
+    const party = partyManager.getParty(save.partyId);
+    if (!party) return { text: 'Party not found.', newSave: { ...save, partyId: undefined } as any };
+    partyManager.syncMember(save.playerId);
+    return { text: partyManager.formatPartyInfo(party, save.playerId) };
+  }
+
+  // party accept
+  if (subcmd === 'accept') {
+    const invite = partyManager.pendingPartyInvites[save.playerId];
+    if (!invite) return { text: 'No party invitation pending.' };
+    delete partyManager.pendingPartyInvites[save.playerId];
+    const party = partyManager.addMember(invite.partyId, save.playerId, save.stats.name);
+    if (!party) return { text: 'Could not join party (it may be full or disbanded).' };
+    partyManager.notifyAllMembers(invite.partyId, `[Party] ${save.stats.name} has joined! Party: ${party.members.map((m: any) => m.playerName).join(', ')}`);
+    return { text: `You joined the party!\n${partyManager.formatPartyInfo(party, save.playerId)}`, newSave: { ...save, partyId: party.partyId } as any };
+  }
+
+  // party decline
+  if (subcmd === 'decline') {
+    delete partyManager.pendingPartyInvites[save.playerId];
+    return { text: 'Party invitation declined.' };
+  }
+
+  // party invite <name>
+  if (subcmd === 'invite') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: party invite <player_name>' };
+
+    const targetSession = presenceManager.getSessionByPlayerName(targetName);
+    if (!targetSession) return { text: `Player "${targetName}" is not online.` };
+    if (targetSession.playerId === save.playerId) return { text: 'You cannot invite yourself.' };
+
+    // Create or use existing party
+    let partyId = save.partyId;
+    if (!partyId) {
+      const party = partyManager.createParty(save.playerId, save.stats.name);
+      partyId = party.partyId;
+      partyManager.notifyAllMembers(partyId, `[Party] ${save.stats.name} formed a party.`);
+    }
+
+    // Register pending invite so accept/decline works
+    partyManager.pendingPartyInvites[targetSession.playerId] = {
+      partyId: partyId!,
+      fromName: save.stats.name,
+    };
+
+    // Send invite to target
+    presenceManager.broadcastToPlayer(targetSession.playerId, `[Party] ${save.stats.name} invites you to a party. Type 'party accept' or 'party decline'.`);
+
+    return { text: `Party invite sent to ${targetName}.` };
+  }
+
+  // party leave
+  if (subcmd === 'leave') {
+    if (!save.partyId) return { text: 'You are not in a party.' };
+    const newParty = partyManager.removeMember(save.partyId, save.playerId);
+    partyManager.notifyAllMembers(save.partyId, `[Party] ${save.stats.name} left the party.`);
+    if (newParty) partyManager.notifyAllMembers(newParty.partyId, `[Party] Party: ${newParty.members.map((m: any) => m.playerName).join(', ')}`);
+    return { text: 'You left the party.', newSave: { ...save, partyId: undefined } as any };
+  }
+
+  // party disband
+  if (subcmd === 'disband') {
+    if (!save.partyId) return { text: 'You are not in a party.' };
+    if (!partyManager.isLeader(save.playerId)) return { text: 'Only the party leader can disband.' };
+    partyManager.disband(save.partyId);
+    return { text: 'Party disbanded.', newSave: { ...save, partyId: undefined } as any };
+  }
+
+  // party kick <name>
+  if (subcmd === 'kick') {
+    const targetName = args[1];
+    if (!save.partyId) return { text: 'You are not in a party.' };
+    if (!partyManager.isLeader(save.playerId)) return { text: 'Only the party leader can kick members.' };
+    const targetId = presenceManager.getPlayerIdByName(targetName);
+    if (!targetId) return { text: `Player "${targetName}" not found.` };
+    const party = partyManager.getPartyOf(save.playerId);
+    if (!party?.members.find((m: any) => m.playerId === targetId)) return { text: `${targetName} is not in your party.` };
+    const newParty = partyManager.removeMember(save.partyId, targetId);
+    partyManager.notifyAllMembers(save.partyId, `[Party] ${targetName} was kicked from the party.`);
+    return { text: `Kicked ${targetName} from the party.`, newSave: newParty ? save : { ...save, partyId: undefined } as any };
+  }
+
+  return { text: `Usage: party [info|invite <name>|leave|disband|kick <name>|accept|decline]` };
+}
+
+// ─── Trade ───────────────────────────────────────────────────────────────────
+
+function handleTrade(args: string[], save: SaveFile): ParseResult {
+  const subcmd = args[0]?.toLowerCase();
+
+  // trade view — show current active trade
+  if (subcmd === 'view') {
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    return { text: tradeManager.formatTradeView(trade, save.playerId) };
+  }
+
+  // trade accept — buyer locks gold
+  if (subcmd === 'accept') {
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    if (trade.sellerId === save.playerId) return { text: 'You cannot accept your own offer.' };
+    const result = tradeManager.acceptBuyer(trade.tradeId, save.playerId);
+    if (result.error) return { text: result.error };
+    return { text: `You accepted the trade. Waiting for seller to confirm...` };
+  }
+
+  // trade confirm — seller executes
+  if (subcmd === 'confirm') {
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    if (trade.buyerId === save.playerId) return { text: 'You are the buyer. Use "trade accept" first.' };
+    if (!trade.goldEscrowed) return { text: 'Buyer has not accepted yet.' };
+    const result = tradeManager.confirmSeller(trade.tradeId, save.playerId);
+    if (result.error) return { text: result.error };
+    // Reload saves from session
+    return { text: result.error ?? `Trade complete!` };
+  }
+
+  // trade counter <price>
+  if (subcmd === 'counter') {
+    const newPrice = parseInt(args[1]);
+    if (isNaN(newPrice) || newPrice < 0) return { text: 'Usage: trade counter <price>' };
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    const result = tradeManager.counter(trade.tradeId, save.playerId, newPrice);
+    if (result.error) return { text: result.error };
+    return { text: `Counter-offer sent: ${newPrice}g.` };
+  }
+
+  // trade decline
+  if (subcmd === 'decline') {
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    tradeManager.cancel(trade.tradeId, save.playerId);
+    return { text: 'Trade declined.' };
+  }
+
+  // trade cancel
+  if (subcmd === 'cancel') {
+    const trade = tradeManager.getActiveTrade(save.playerId);
+    if (!trade) return { text: 'No active trade.' };
+    tradeManager.cancel(trade.tradeId, save.playerId);
+    return { text: 'Trade cancelled.' };
+  }
+
+  // trade offer <player> "<item>" <price>
+  if (subcmd === 'offer') {
+    if (args.length < 3) {
+      return { text: 'Usage: trade offer <player_name> "<item_name>" <price>\n  Example: trade offer Kael "Void Wraith Essence" 5000' };
+    }
+
+    // Parse: offer <playerName> "<itemName>" <price>
+    // args = ['offer', 'Kael', '"Void', 'Wraith', 'Essence"', '5000']
+    // Find the item name (quoted or last arg before price)
+    const priceRaw = args[args.length - 1];
+    const price = parseInt(priceRaw);
+    if (isNaN(price)) return { text: 'Invalid price. Usage: trade offer <player> "<item>" <price>' };
+
+    // The player name is args[1]
+    const targetName = args[1];
+
+    // Reconstruct item name from args 2..-2 (strip any quotes)
+    const itemParts = args.slice(2, args.length - 1).map(s => s.replace(/^"|"$/g, ''));
+    const itemName = itemParts.join(' ');
+
+    // Find item in inventory
+    const unequipped = save.inventory.filter(s => !s.equipped);
+    const slot = unequipped.find(s => {
+      const item = getItem(s.itemId);
+      return item?.name.toLowerCase().includes(itemName.toLowerCase());
+    });
+    if (!slot) return { text: `You don't have an item matching "${itemName}". Check your inventory.` };
+    const itemDef = getItem(slot.itemId);
+    if (itemDef?.tradelock) return { text: 'That item cannot be traded.' };
+
+    const result = tradeManager.offer(
+      save.playerId,
+      targetName,
+      slot.itemId,
+      itemDef?.name ?? slot.itemId,
+      itemDef?.rarity ?? 'common',
+      itemDef?.description ?? '',
+      price,
+    );
+
+    if ('error' in result) return { text: (result as { error: string }).error };
+    return { text: `Offer sent to ${targetName} for ${itemDef?.name} at ${price}g.` };
+  }
+
+  // No subcommand — show help
+  return { text: `  Trade Commands:
+    who                    — see players in your area
+    trade offer <player> "<item>" <price>  — offer item for gold
+    trade view             — view active trade details
+    trade accept           — buyer: accept and lock gold
+    trade confirm         — seller: finalize trade
+    trade counter <price>  — counter-offer
+    trade decline/cancel   — cancel trade
+  NOTE: Both players must be in the same area. Trading unavailable in combat.` };
+}
+

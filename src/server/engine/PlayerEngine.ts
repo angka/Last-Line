@@ -86,6 +86,7 @@ export function createDefaultStats(name: string): PlayerStats {
 export function createDefaultSave(playerName: string): SaveFile {
   return {
     saveId: uuid(),
+    playerId: '', // populated at registration time
     playerName,
     savedAt: new Date().toISOString(),
     playtime: 0,
@@ -115,6 +116,7 @@ export function createDefaultSave(playerName: string): SaveFile {
       chatParty: true,
       chatShout: true,
     },
+    pvp: { enabled: false, safeZone: true },
     regenState: 'city',
   };
 }

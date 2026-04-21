@@ -84,6 +84,7 @@ function createDefaultStats(name) {
 function createDefaultSave(playerName) {
     return {
         saveId: (0, uuid_1.v4)(),
+        playerId: '', // populated at registration time
         playerName,
         savedAt: new Date().toISOString(),
         playtime: 0,
@@ -113,6 +114,7 @@ function createDefaultSave(playerName) {
             chatParty: true,
             chatShout: true,
         },
+        pvp: { enabled: false, safeZone: true },
         regenState: 'city',
     };
 }

@@ -198,6 +198,7 @@ export type StatusType = 'poison' | 'burn' | 'stun' | 'freeze' | 'bleed' | 'weak
 
 export interface SaveFile {
   saveId: string;
+  playerId: string;
   playerName: string;
   savedAt: string;
   playtime: number;
@@ -219,8 +220,15 @@ export interface SaveFile {
     dungeonChests: DungeonChestLoot[];
   };
   pendingLoot: LootDrop[];
+  partyId?: string;
+  pvp: PvPState;
   socialPrefs: SocialPrefs;
   regenState: RegenState;
+}
+
+export interface PvPState {
+  enabled: boolean;   // player has toggled PvP on
+  safeZone: boolean;   // area is a safe zone (no PvP possible)
 }
 
 export interface DungeonProgress {
@@ -324,6 +332,21 @@ export interface CombatSession {
   winner?: 'player' | 'enemy';
 }
 
+/** Party combat session type (defined in CombatTimerEngine.ts) */
+export interface PartyCombatSession {
+  sessionId: string;
+  participants: CombatParticipant[];
+  turnIndex: number;
+  round: number;
+  areaId: string;
+  log: CombatLogEntry[];
+  turnStartedAt: number;
+  turnTimeoutMs: number;
+  timedOutCount: Map<string, number>;
+  winner?: 'player' | 'enemy';
+  partyId: string;
+}
+
 export interface CombatLogEntry {
   round: number;
   text: string;
@@ -367,11 +390,95 @@ export interface GameSession {
   saveSlot: number;
   currentState: SaveFile;
   combatState?: CombatSession;
+  partyCombatState?: any;   // Phase 5: PartyCombatSession
+  combatTimerHandle?: { clear(): void };
   regenInterval?: NodeJS.Timeout;
   regenState: RegenState;
   connectedAt: Date;
   lastActivity: Date;
 }
+
+// ─── Multiplayer / Social Types ─────────────────────────────────────────────
+
+export interface PresenceEntry {
+  playerId: string;
+  playerName: string;
+  areaId: string;
+  activity: PlayerActivity;
+  level: number;
+}
+
+export type PlayerActivity = 'Exploring' | 'In Combat' | 'Resting' | 'Shopping' | 'Trading' | 'Crafting' | 'Gathering' | 'Away';
+
+export interface ChatMessage {
+  channel: 'area' | 'party' | 'whisper' | 'shout' | 'system';
+  from: string;
+  to?: string;
+  text: string;
+  timestamp: number;
+}
+
+// ─── Party Types ─────────────────────────────────────────────────────────────
+
+export interface Party {
+  partyId: string;
+  leaderId: string;
+  leaderName: string;
+  members: PartyMember[];
+  partyChatHistory: ChatMessage[];
+  createdAt: number;
+  combatSessionId?: string;
+}
+
+export interface PartyMember {
+  playerId: string;
+  playerName: string;
+  level: number;
+  hp: number;
+  maxHp: number;
+  mana: number;
+  maxMana: number;
+  activity: PlayerActivity;
+  areaId: string;
+  isLeader: boolean;
+  isDowned: boolean;
+  downedAt?: number;
+  downedTimeout?: NodeJS.Timeout;
+  timedOutCount: number;
+}
+
+// ─── Trade Types ─────────────────────────────────────────────────────────────
+
+export interface TradeSession {
+  tradeId: string;
+  sellerId: string;
+  sellerName: string;
+  buyerId: string;
+  buyerName: string;
+  areaId: string;
+  itemId: string;
+  itemName: string;
+  itemRarity: Rarity;
+  itemDescription: string;
+  offeredPrice: number;
+  agreedPrice: number | null;
+  buyerConfirmed: boolean;
+  sellerConfirmed: boolean;
+  goldEscrowed: boolean;
+  counterHistory: CounterOffer[];
+  createdAt: number;
+  expiresAt: number;
+  timeoutHandle?: NodeJS.Timeout;
+  status: TradeStatus;
+}
+
+export interface CounterOffer {
+  from: string;
+  price: number;
+  timestamp: number;
+}
+
+export type TradeStatus = 'pending' | 'negotiating' | 'buyer_confirmed' | 'complete' | 'cancelled';
 
 // ─── Menu Types ──────────────────────────────────────────────────────────
 

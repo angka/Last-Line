@@ -148,7 +148,14 @@ function createMinimalSave(): SaveFile {
     pendingLoot: [],
     socialPrefs: { chatVisible: true, nearbyVisible: true, chatArea: true, chatParty: true, chatShout: true },
     pvp: { enabled: false, safeZone: false },
+    pvpStats: { kills: 0, deaths: 0, winStreak: 0, bestStreak: 0, seasonWins: 0, seasonPoints: 1000 },
     regenState: 'combat',
+    achievements: [],
+    achievementStats: {
+      totalKills: 0, bossKills: 0, tradesCompleted: 0, itemsCrafted: 0,
+      resourcesGathered: 0, pvpKills: 0, worldBossKills: 0,
+      dungeonsCleared: [], deepestFloors: {}, visitedAreas: [],
+    },
   };
 }
 

@@ -110,6 +110,9 @@ class PartyManager {
     getParty(partyId) {
         return this.parties.get(partyId);
     }
+    getAllParties() {
+        return [...this.parties.values()];
+    }
     getPartyOf(playerId) {
         const partyId = this.playerParty.get(playerId);
         return partyId ? this.parties.get(partyId) : undefined;

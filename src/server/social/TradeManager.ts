@@ -1,6 +1,7 @@
 import type { TradeSession, CounterOffer, Rarity } from '../../types';
 import { presenceManager } from './PresenceManager';
 import { inventoryRemove, inventoryAdd } from '../items/InventoryManager';
+import { processAchievementStats } from '../engine/AchievementEngine';
 import { v4 as uuid } from 'uuid';
 
 const TRADE_TIMEOUT_MS = 90_000;
@@ -206,6 +207,12 @@ class TradeManager {
     // Add item to buyer
     const { save: newBuyerSave } = inventoryAdd(buyerSession.currentState, trade.itemId, 1);
     buyerSession.currentState = newBuyerSave;
+
+    // Phase 8: Wire trade achievement
+    const { save: sellerAchSave } = processAchievementStats(sellerSession.currentState, { tradesCompleted: 1 });
+    const { save: buyerAchSave } = processAchievementStats(buyerSession.currentState, { tradesCompleted: 1 });
+    sellerSession.currentState = sellerAchSave;
+    buyerSession.currentState = buyerAchSave;
 
     trade.status = 'complete';
     const finalMessage = `[Trade] ✓ Trade complete! ${trade.sellerName} sold "${trade.itemName}" to ${trade.buyerName} for ${price}g.`;

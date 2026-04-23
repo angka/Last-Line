@@ -17,6 +17,8 @@ const PresenceManager_1 = require("../social/PresenceManager");
 const PartyManager_1 = require("../social/PartyManager");
 const TradeManager_1 = require("../social/TradeManager");
 const PartyCombatManager_1 = require("../engine/PartyCombatManager");
+const AchievementEngine_1 = require("../engine/AchievementEngine");
+const WorldBossEngine_1 = require("../engine/WorldBossEngine");
 function parseCommand(cmd, save, combatState, _sessionId, playerId) {
     const parts = cmd.trim().split(/\s+/);
     const verb = parts[0]?.toLowerCase();
@@ -263,6 +265,14 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
         }
         case 'pvp': {
             return handlePvp(args, save);
+        }
+        // ── Phase 7: Achievements ────────────────────────────────────────────────
+        case 'achievements': {
+            return handleAchievements(save);
+        }
+        // ── Phase 7: World Boss ─────────────────────────────────────────────────
+        case 'worldboss': {
+            return handleWorldBoss(args, save);
         }
         default: {
             return { text: `Unknown command: "${verb}". Type 'help' for a list of commands.` };
@@ -875,6 +885,20 @@ function formatHelp() {
     trade counter <price>  — counter-offer
     trade decline/cancel   — cancel trade
 
+  PvP
+    pvp status            — show your PvP status
+    pvp on                — enable PvP (outside safe zones)
+    pvp off               — disable PvP
+    pvp area              — check current area PvP rules
+
+  ACHIEVEMENTS
+    achievements          — view all achievements and progress
+
+  WORLD BOSS
+    worldboss             — check active world boss
+    worldboss status      — active boss status and HP
+    worldboss join        — travel to the active world boss location
+
   SYSTEM
     save                    — save game (at Inn)
     help                    — show this help
@@ -1372,6 +1396,61 @@ function handlePvp(args, save) {
         };
     }
     return { text: 'Usage: pvp [on|off|status|area]' };
+}
+// ════════════════════════════════════════════════════════════════════════════
+//  PHASE 7 — ACHIEVEMENTS & WORLD BOSS HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+// ─── Achievements ──────────────────────────────────────────────────────────────
+function handleAchievements(save) {
+    const stats = save.achievementStats;
+    const achievementStats = {
+        totalKills: stats.totalKills,
+        bossKills: stats.bossKills,
+        tradesCompleted: stats.tradesCompleted,
+        itemsCrafted: stats.itemsCrafted,
+        resourcesGathered: stats.resourcesGathered,
+        pvpKills: stats.pvpKills,
+        worldBossKills: stats.worldBossKills,
+        dungeonsCleared: new Set(stats.dungeonsCleared),
+        deepestFloors: stats.deepestFloors,
+        visitedAreas: new Set(stats.visitedAreas),
+    };
+    return { text: (0, AchievementEngine_1.formatAchievements)(save, achievementStats) };
+}
+// ─── World Boss ───────────────────────────────────────────────────────────────
+function handleWorldBoss(args, save) {
+    const sub = args[0]?.toLowerCase();
+    if (sub === 'status' || !sub) {
+        return { text: WorldBossEngine_1.worldBossEngine.formatWorldBossStatus() };
+    }
+    if (sub === 'join') {
+        const active = WorldBossEngine_1.worldBossEngine.getAllActiveEvents();
+        if (active.length === 0) {
+            return { text: 'No world boss is currently active.' };
+        }
+        const bossId = active[0].bossId;
+        const targetAreaId = WorldBossEngine_1.WORLD_BOSS_SPAWNS[bossId] ?? 'ashford_village_square';
+        const target = (0, areas_1.getArea)(targetAreaId);
+        const isCity = target?.regenState === 'city';
+        const newSave = {
+            ...save,
+            worldState: {
+                ...save.worldState,
+                currentArea: targetAreaId,
+                currentCity: isCity ? targetAreaId : save.worldState.currentCity,
+                unlockedCities: save.worldState.unlockedCities.includes(targetAreaId)
+                    ? save.worldState.unlockedCities
+                    : [...save.worldState.unlockedCities, targetAreaId],
+            },
+            regenState: target?.safeZone ? 'city' : 'exploring',
+            pvp: { ...save.pvp, safeZone: target?.safeZone ?? false },
+        };
+        return {
+            text: `You travel to the World Boss location: ${target?.name ?? targetAreaId}.\n${(0, areas_1.describeArea)(targetAreaId)}`,
+            newSave,
+        };
+    }
+    return { text: 'Usage: worldboss [status|join]\n  worldboss status  — check active world boss\n  worldboss join    — travel to the active world boss location' };
 }
 // ════════════════════════════════════════════════════════════════════════════
 //  PHASE 4 — SOCIAL & MULTIPLAYER HANDLERS

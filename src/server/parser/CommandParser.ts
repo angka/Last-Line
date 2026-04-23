@@ -9,12 +9,54 @@ import { PHYSICAL_SKILLS, MAGIC_SKILLS, SUPPORT_SKILLS, getSkillByItemId, PHYSIC
 import { CRAFTING_RECIPES, GATHERING_NODES } from '../../data/crafting';
 import { formatCraftingMenu, listCraftableItems, craftItem, gatherFromNode, formatAreaNodes } from '../engine/CraftingManager';
 import { getDungeonChestLoot, formatLootDrops } from '../engine/LootEngine';
-import { getDungeonForArea, getDungeonFloor, getNextFloorArea, getPrevFloorArea } from '../../data/dungeons';
+import { getDungeonForArea, getDungeonFloor, getNextFloorArea, getPrevFloorArea, getNextFloorArea2, getPrevFloorArea2, isInfiniteFloor, getInfiniteFloorInfo, describeInfiniteFloor } from '../../data/dungeons';
 import { generateBossEncounter } from '../engine/CombatEngine';
 import { presenceManager } from '../social/PresenceManager';
 import { partyManager } from '../social/PartyManager';
+import { leaderboardManager } from '../social/LeaderboardManager';
 import { tradeManager } from '../social/TradeManager';
 import { getPartyCombat } from '../engine/PartyCombatManager';
+import { formatAchievements, processAchievementStats, formatAchievementUnlockBatch } from '../engine/AchievementEngine';
+import type { AchievementDef } from '../../types';
+
+// ─── Helper: wire achievement stats into any save update ────────────────────────
+
+function withAchievements(result: ParseResult, save: SaveFile, updates: Parameters<typeof processAchievementStats>[1]): ParseResult {
+  const { save: newSave, newlyUnlocked } = processAchievementStats(save, updates);
+  const notification = formatAchievementUnlockBatch(newlyUnlocked as AchievementDef[]);
+  return {
+    ...result,
+    newSave,
+    achievementUnlocks: notification ? [notification] : [],
+    text: result.text + (notification ? '\n' + notification : ''),
+  };
+}
+
+// ─── Helper: apply skill combat achievements ────────────────────────────────────
+
+function applySkillAchievements(
+  skillResult: { session: any; newSave: SaveFile; text: string },
+  originalCombatState: any,
+): ParseResult {
+  if (!skillResult.session.winner) {
+    return { text: skillResult.text, newSave: skillResult.newSave, combatState: skillResult.session };
+  }
+  const enemiesKilled = skillResult.session.participants.filter((p: any) => p.type === 'enemy' && p.hp <= 0);
+  const bossKills = enemiesKilled.filter((e: any) => e.isBoss).length;
+  const dungeonInfo = getDungeonForArea(originalCombatState.areaId);
+  return withAchievements(
+    { text: skillResult.text, newSave: skillResult.newSave, combatState: undefined },
+    skillResult.newSave,
+    {
+      totalKills: enemiesKilled.length,
+      bossKills,
+      dungeonClear: bossKills > 0 && dungeonInfo ? dungeonInfo.id : undefined,
+    },
+  );
+}
+
+// ─── Movement ──────────────────────────────────────────────────────────
+import { worldBossEngine, WORLD_BOSS_SPAWNS } from '../engine/WorldBossEngine';
 
 export interface PushMessage {
   channel: string;
@@ -38,6 +80,8 @@ export interface ParseResult {
     areaId: string;
     enemies: any[];
   };
+  /** Phase 8: achievement unlock notification texts from this command */
+  achievementUnlocks?: string[];
 }
 
 export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): ParseResult {
@@ -97,9 +141,20 @@ export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _se
       const page = parseInventoryPageIndex(args[0], save);
       if (page === -1 || page >= unequipped.length) return { text: 'Invalid slot number.' };
       const item = unequipped[page];
+      const itemDef = getItem(item.itemId);
       const newSave = inventoryEquip(save, item.slotId);
+      const rarity = itemDef?.rarity;
+      // Check legendary/mythic equip achievements
+      if (rarity === 'legendary' || rarity === 'mythic') {
+        const result = withAchievements(
+          { text: `You equipped ${itemDef?.name ?? item.itemId}.`, newSave },
+          newSave,
+          { itemEquippedRarity: rarity },
+        );
+        return result;
+      }
       return {
-        text: `You equipped ${getItem(item.itemId)?.name ?? item.itemId}.`,
+        text: `You equipped ${itemDef?.name ?? item.itemId}.`,
         newSave,
       };
     }
@@ -310,6 +365,24 @@ export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _se
       return handlePvp(args, save);
     }
 
+    // ── Phase 7: Achievements ────────────────────────────────────────────────
+    case 'achievements': {
+      return handleAchievements(save);
+    }
+
+    // ── Phase 7: World Boss ─────────────────────────────────────────────────
+    case 'worldboss': {
+      return handleWorldBoss(args, save);
+    }
+
+    // ── Phase 8: PvP Leaderboard ───────────────────────────────────────────────
+    case 'leaderboard': {
+      return handleLeaderboard(args, save);
+    }
+    case 'rank': {
+      return handleRank(save);
+    }
+
     default: {
       return { text: `Unknown command: "${verb}". Type 'help' for a list of commands.` };
     }
@@ -389,15 +462,17 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
                 { channel: 'area', areaId: targetId, text: `[Combat] ⚔ ${save.stats.name} triggered party combat!`, excludeSelf: false },
               ],
               partyEncounter: { partyId: save.partyId, areaId: targetId, enemies },
+              // Phase 8: track area visit
+              achievementUnlocks: [],
             };
           }
         }
         const session = createCombatSession(newSave, enemies, targetId);
-        return {
+        return withAchievements({
           text: `${describeArea(targetId)}\n\n  ENCOUNTER! ${enemies.map(e => e.name).join(', ')} blocks your path!\n${formatCombatState(session)}\n${formatCombatPrompt(session, newSave.stats.hp, newSave.stats.maxHp, newSave.stats.mana, newSave.stats.maxMana)}`,
           newSave,
           combatState: session,
-        };
+        }, newSave, { areaVisited: targetId });
       }
     }
   }
@@ -407,16 +482,17 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
     ? `\n  [Dungeon: ${dungeonInfo2.dungeon.name} — Floor ${dungeonInfo2.floor}/${dungeonInfo2.dungeon.floors.length}]`
     : '';
 
-  return {
+  const baseResult: ParseResult = {
     text: describeArea(targetId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${regenStateLabel(newSave.regenState)}]${floorNote}${unlockMsg}`,
     newSave,
     pushMessages: [
-      // Departure from old area (client hasn't switched areas yet)
       { channel: 'departure', areaId: save.worldState.currentArea, text: `[Nearby] ${save.stats.name} has left.`, excludeSelf: true },
-      // Arrival in new area
       { channel: 'arrival', areaId: targetId, text: `[Nearby] ${save.stats.name} has entered the area.`, excludeSelf: false },
     ],
   };
+
+  // Phase 8: track area visit achievement
+  return withAchievements(baseResult, newSave, { areaVisited: targetId });
 }
 
 // ─── Combat ───────────────────────────────────────────────────────────────
@@ -435,11 +511,22 @@ function handleAttack(args: string[], save: SaveFile, combatState: any): ParseRe
 
   if (session.winner === 'player') {
     const newSave = resolveVictory(save, session);
+    // Wire achievements: count kills
+    const enemiesKilled = session.participants.filter((p: any) => p.type === 'enemy' && p.hp <= 0);
+    const bossKills = enemiesKilled.filter((e: any) => e.isBoss).length;
+    // Dungeon clear: if boss killed in a dungeon
+    const dungeonInfo = getDungeonForArea(combatState.areaId);
     result = {
       text: `${formatCombatState(session)}\n\n  Victory!`,
       newSave,
       combatState: undefined,
     };
+    result = withAchievements(result, newSave, {
+      totalKills: enemiesKilled.length,
+      bossKills: bossKills,
+      dungeonClear: bossKills > 0 && dungeonInfo ? dungeonInfo.id : undefined,
+      dungeonFloorReached: dungeonInfo ? { dungeonId: dungeonInfo.id, floor: getDungeonFloor(combatState.areaId)?.floor ?? 1 } : undefined,
+    });
   } else if (session.winner === 'enemy') {
     const newSave = resolveDefeat(save);
     result = {
@@ -719,10 +806,10 @@ function handleInn(save: SaveFile): ParseResult {
 
 function handleDungeonUp(save: SaveFile): ParseResult {
   const areaId = save.worldState.currentArea;
-  if (!isDungeonArea(areaId)) {
+  if (!isDungeonArea(areaId) && !isInfiniteFloor(areaId)) {
     return { text: 'You are not in a dungeon.' };
   }
-  const prevAreaId = getPrevFloorArea(areaId);
+  const prevAreaId = getPrevFloorArea2(areaId);
   if (!prevAreaId) {
     return { text: 'You are already at the dungeon entrance. Use "leave" to exit.' };
   }
@@ -731,10 +818,10 @@ function handleDungeonUp(save: SaveFile): ParseResult {
 
 function handleDungeonDown(save: SaveFile): ParseResult {
   const areaId = save.worldState.currentArea;
-  if (!isDungeonArea(areaId)) {
+  if (!isDungeonArea(areaId) && !isInfiniteFloor(areaId)) {
     return { text: 'You are not in a dungeon.' };
   }
-  const nextAreaId = getNextFloorArea(areaId);
+  const nextAreaId = getNextFloorArea2(areaId);
   if (!nextAreaId) {
     return { text: 'You are at the deepest floor. Prepare for the boss!' };
   }
@@ -743,6 +830,28 @@ function handleDungeonDown(save: SaveFile): ParseResult {
 
 function handleDungeonLeave(save: SaveFile): ParseResult {
   const areaId = save.worldState.currentArea;
+
+  // Infinite floor — exit back to last normal floor
+  if (isInfiniteFloor(areaId)) {
+    const info = getInfiniteFloorInfo(areaId)!;
+    const lastFloorIdx = info.dungeon.floors.length - 1;
+    const lastFloor = info.dungeon.floors[lastFloorIdx];
+    const entrance = getArea(info.dungeon.entrance);
+    const newSave: SaveFile = {
+      ...save,
+      worldState: {
+        ...save.worldState,
+        currentArea: lastFloor.areaId,
+        currentCity: save.worldState.currentCity,
+      },
+      regenState: 'exploring',
+    };
+    return {
+      text: `  You retreat from the infinite depths of ${info.dungeon.name}...\n\n${describeArea(lastFloor.areaId)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [Exploring]`,
+      newSave,
+    };
+  }
+
   if (!isDungeonArea(areaId)) {
     return { text: 'You are not in a dungeon.' };
   }
@@ -767,6 +876,24 @@ function handleDungeonLeave(save: SaveFile): ParseResult {
 
 function handleDungeonExplore(save: SaveFile): ParseResult {
   const areaId = save.worldState.currentArea;
+
+  // Infinite floor — generate scaled enemies
+  if (isInfiniteFloor(areaId)) {
+    const info = getInfiniteFloorInfo(areaId)!;
+    const depth = info.infiniteFloor - info.dungeon.floors.length;
+    const level = Math.min(99, 30 + depth * 3);
+    const eliteChance = Math.min(0.90, 0.40 + depth * 0.05);
+    const enemies = generateEncounter([level, level + 3], save.stats.level, 2, 4, eliteChance);
+    if (enemies.length === 0) {
+      return { text: `Deep Floor ${info.infiniteFloor} of ${info.dungeon.name}\n\n  You search the area but find nothing this time.` };
+    }
+    const session = createCombatSession(save, enemies, areaId);
+    return {
+      text: `Deep Floor ${info.infiniteFloor} of ${info.dungeon.name}\n\n  You explore the infinite depths... ENCOUNTER! ${enemies.map(e => e.name).join(', ')}!\n${formatCombatState(session)}\n${formatCombatPrompt(session, save.stats.hp, save.stats.maxHp, save.stats.mana, save.stats.maxMana)}`,
+      combatState: session,
+    };
+  }
+
   if (!isDungeonArea(areaId)) {
     return { text: 'You are not in a dungeon. Explore the wilderness with "go <dir>".' };
   }
@@ -810,9 +937,22 @@ function handleDungeonExplore(save: SaveFile): ParseResult {
 
 function handleDungeonStatus(save: SaveFile): ParseResult {
   const areaId = save.worldState.currentArea;
-  if (!isDungeonArea(areaId)) {
+  if (!isDungeonArea(areaId) && !isInfiniteFloor(areaId)) {
     return { text: 'You are not in a dungeon.' };
   }
+
+  // Infinite floor
+  if (isInfiniteFloor(areaId)) {
+    const info = getInfiniteFloorInfo(areaId)!;
+    const { dungeon, infiniteFloor } = info;
+    const depth = infiniteFloor - dungeon.floors.length;
+    const tier = depth <= 2 ? 'Challenging' : depth <= 5 ? 'Perilous' : depth <= 10 ? 'Nightmarish' : 'Abyssal';
+    const level = Math.min(99, 30 + depth * 3);
+    return {
+      text: `  ═══════════ DUNGEON STATUS ═══════════\n  ${dungeon.name}\n  Floor: ${infiniteFloor} (Infinite — ${tier})\n  Difficulty Level: ${level}+\n  ─────────────────────────────────────\n  Type "up" to go back toward entrance.\n  Type "down" to descend deeper (max 50).\n  Type "explore" to seek enemies on this floor.\n  Type "leave" to exit the dungeon.`,
+    };
+  }
+
   const info = getDungeonFloor(areaId);
   if (!info) return { text: 'Unknown dungeon.' };
   const { dungeon, floor } = info;
@@ -824,6 +964,34 @@ function handleDungeonStatus(save: SaveFile): ParseResult {
 }
 
 function moveInDungeon(save: SaveFile, targetAreaId: string, direction: 'up' | 'down'): ParseResult {
+  // Infinite floor entry — uses describeInfiniteFloor
+  if (isInfiniteFloor(targetAreaId)) {
+    const info = getInfiniteFloorInfo(targetAreaId)!;
+    const depth = info.infiniteFloor - info.dungeon.floors.length;
+    const level = Math.min(99, 30 + depth * 3);
+    const newSave: SaveFile = {
+      ...save,
+      worldState: {
+        ...save.worldState,
+        currentArea: targetAreaId,
+        unlockedDungeons: save.worldState.unlockedDungeons.includes(info.dungeon.id)
+          ? save.worldState.unlockedDungeons
+          : [...save.worldState.unlockedDungeons, info.dungeon.id],
+      },
+      regenState: 'exploring',
+    };
+    const areaDesc = describeInfiniteFloor(info.dungeon, info.infiniteFloor);
+    const levelTag = `  Enemy Level: ${level}+  |  Difficulty: ${depth <= 2 ? 'Challenging' : depth <= 5 ? 'Perilous' : depth <= 10 ? 'Nightmarish' : 'Abyssal'}`;
+    let result: ParseResult = {
+      text: areaDesc + '\n' + levelTag + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [Exploring]`,
+      newSave,
+    };
+    result = withAchievements(result, newSave, {
+      dungeonFloorReached: { dungeonId: info.dungeon.id, floor: info.infiniteFloor },
+    });
+    return result;
+  }
+
   const target = getArea(targetAreaId);
   if (!target) return { text: 'Cannot move there.' };
 
@@ -846,14 +1014,22 @@ function moveInDungeon(save: SaveFile, targetAreaId: string, direction: 'up' | '
   };
 
   const dungeonInfo2 = getDungeonFloor(targetAreaId);
-  const floorNote = dungeonInfo2
+  let floorNote = dungeonInfo2
     ? `  [Dungeon: ${dungeonInfo2.dungeon.name} — Floor ${dungeonInfo2.floor}/${dungeonInfo2.dungeon.floors.length}]`
     : '';
 
-  return {
+  // Track deepest floor reached (achievement)
+  let result: ParseResult = {
     text: describeArea(targetAreaId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${regenStateLabel(newSave.regenState)}]\n${floorNote}`,
     newSave,
   };
+
+  if (dungeonInfo2) {
+    result = withAchievements(result, newSave, {
+      dungeonFloorReached: { dungeonId: dungeonInfo2.dungeon.id, floor: dungeonInfo2.floor },
+    });
+  }
+  return result;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -994,6 +1170,26 @@ function formatHelp(): string {
     trade counter <price>  — counter-offer
     trade decline/cancel   — cancel trade
 
+  PvP
+    pvp status            — show your PvP status
+    pvp on                — enable PvP (outside safe zones)
+    pvp off               — disable PvP
+    pvp area              — check current area PvP rules
+
+  ACHIEVEMENTS
+    achievements          — view all achievements and progress
+
+  WORLD BOSS
+    worldboss             — check active world boss
+    worldboss status      — active boss status and HP
+    worldboss join        — travel to the active world boss location
+    worldboss attack      — attack the active world boss (at boss location)
+    worldboss flee        — flee from the world boss fight
+
+  PvP LEADERBOARD
+    leaderboard           — view top 10 PvP players by ELO rating
+    rank                  — see your personal PvP rank and stats
+
   SYSTEM
     save                    — save game (at Inn)
     help                    — show this help
@@ -1024,7 +1220,7 @@ function handleCombatSkill(args: string[], save: SaveFile, combatState: any): Pa
       return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
     }
     const result = playerSkill(combatState, 'physical', idx, save);
-    return { text: result.text, newSave: result.newSave, combatState: result.session };
+    return applySkillAchievements(result, combatState);
   }
   if (skillType === 'magic' || skillType === 'mag') {
     if (idx < 0 || idx >= save.skills.magic.length) {
@@ -1036,7 +1232,7 @@ function handleCombatSkill(args: string[], save: SaveFile, combatState: any): Pa
       return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
     }
     const result = playerSkill(combatState, 'magic', idx, save);
-    return { text: result.text, newSave: result.newSave, combatState: result.session };
+    return applySkillAchievements(result, combatState);
   }
   if (skillType === 'support' || skillType === 'sup') {
     if (idx < 0 || idx >= save.skills.support.length) {
@@ -1048,7 +1244,7 @@ function handleCombatSkill(args: string[], save: SaveFile, combatState: any): Pa
       return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
     }
     const result = playerSkill(combatState, 'support', idx, save);
-    return { text: result.text, newSave: result.newSave, combatState: result.session };
+    return applySkillAchievements(result, combatState);
   }
   return { text: 'Usage: skill physical/magic/support <n>' };
 }
@@ -1126,13 +1322,26 @@ function handleCraft(args: string[], save: SaveFile): ParseResult {
     return { text: 'Usage: craft [n] — type "craft" without args to see recipes.' };
   }
   const result = craftItem(save, idx);
-  return { text: result.text, newSave: result.newSave };
+  // Wire achievements: increment craft count
+  return withAchievements(
+    { text: result.text, newSave: result.newSave },
+    result.newSave ?? save,
+    { itemsCrafted: 1 },
+  );
 }
 
 // ─── Gathering ────────────────────────────────────────────────────────────────
 
 function handleGather(verb: string, save: SaveFile): ParseResult {
   const result = gatherFromNode(save, save.worldState.currentArea, verb as any);
+  // Wire achievements: increment gather count
+  if (result.newSave) {
+    return withAchievements(
+      { text: result.text, newSave: result.newSave },
+      result.newSave,
+      { resourcesGathered: 1 },
+    );
+  }
   return { text: result.text, newSave: result.newSave };
 }
 
@@ -1514,6 +1723,10 @@ function handlePvp(args: string[], save: SaveFile): ParseResult {
     lines.push('  pvp area      — check current area PvP status');
     lines.push('  ─────────────────────────────────────');
     lines.push('  NOTE: Safe zones (city squares) always block PvP.');
+    lines.push('');
+    lines.push('  PvP LEADERBOARD (Phase 8)');
+    lines.push('  leaderboard         — view top PvP players');
+    lines.push('  rank                — see your personal PvP rank');
     return { text: lines.join('\n') };
   }
 
@@ -1544,6 +1757,88 @@ function handlePvp(args: string[], save: SaveFile): ParseResult {
   }
 
   return { text: 'Usage: pvp [on|off|status|area]' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PHASE 8 — ACHIEVEMENTS & WORLD BOSS COMBAT
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Achievements ──────────────────────────────────────────────────────────────
+
+function handleAchievements(save: SaveFile): ParseResult {
+  const stats = save.achievementStats;
+  const achievementStats = {
+    totalKills: stats.totalKills,
+    bossKills: stats.bossKills,
+    tradesCompleted: stats.tradesCompleted,
+    itemsCrafted: stats.itemsCrafted,
+    resourcesGathered: stats.resourcesGathered,
+    pvpKills: stats.pvpKills,
+    worldBossKills: stats.worldBossKills,
+    dungeonsCleared: new Set(stats.dungeonsCleared),
+    deepestFloors: stats.deepestFloors,
+    visitedAreas: new Set(stats.visitedAreas),
+  };
+  return { text: formatAchievements(save, achievementStats as any) };
+}
+
+// ─── World Boss ───────────────────────────────────────────────────────────────
+
+function handleWorldBoss(args: string[], save: SaveFile): ParseResult {
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'status' || !sub) {
+    return { text: worldBossEngine.formatWorldBossStatus() };
+  }
+
+  if (sub === 'join') {
+    const active = worldBossEngine.getAllActiveEvents();
+    if (active.length === 0) {
+      return { text: 'No world boss is currently active.' };
+    }
+    const bossId = active[0].bossId;
+    const targetAreaId = WORLD_BOSS_SPAWNS[bossId] ?? 'ashford_village_square';
+    const target = getArea(targetAreaId);
+    const isCity = target?.regenState === 'city';
+
+    const newSave: SaveFile = {
+      ...save,
+      worldState: {
+        ...save.worldState,
+        currentArea: targetAreaId,
+        currentCity: isCity ? targetAreaId : save.worldState.currentCity,
+        unlockedCities: save.worldState.unlockedCities.includes(targetAreaId)
+          ? save.worldState.unlockedCities
+          : [...save.worldState.unlockedCities, targetAreaId],
+      },
+      regenState: target?.safeZone ? 'city' : 'exploring',
+      pvp: { ...save.pvp, safeZone: target?.safeZone ?? false },
+    };
+
+    return {
+      text: `You travel to the World Boss location: ${target?.name ?? targetAreaId}.\n${describeArea(targetAreaId)}\n\nPhase 8: Use "worldboss attack" to join the fight!`,
+      newSave,
+    };
+  }
+
+  return {
+    text: 'Usage: worldboss [status|join]\n' +
+      '  worldboss status  — check active world boss HP\n' +
+      '  worldboss join    — travel to the active world boss location\n' +
+      '  worldboss attack  — attack the active world boss\n' +
+      '  worldboss flee    — flee from the world boss fight',
+  };
+}
+
+// ─── PvP Leaderboard (Phase 8) ────────────────────────────────────────────────
+
+function handleLeaderboard(args: string[], save: SaveFile): ParseResult {
+  const limit = parseInt(args[0] ?? '10');
+  return { text: leaderboardManager.formatLeaderboard(isNaN(limit) ? 10 : limit) };
+}
+
+function handleRank(save: SaveFile): ParseResult {
+  return { text: leaderboardManager.formatRank(save.playerId) };
 }
 
 // ════════════════════════════════════════════════════════════════════════════

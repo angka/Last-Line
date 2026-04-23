@@ -181,6 +181,21 @@ export interface SaveFile {
     pvp: PvPState;
     socialPrefs: SocialPrefs;
     regenState: RegenState;
+    /** Phase 7: unlocked achievements */
+    achievements: UnlockedAchievement[];
+    /** Phase 7: achievement counters */
+    achievementStats: {
+        totalKills: number;
+        bossKills: number;
+        tradesCompleted: number;
+        itemsCrafted: number;
+        resourcesGathered: number;
+        pvpKills: number;
+        worldBossKills: number;
+        dungeonsCleared: string[];
+        deepestFloors: Record<string, number>;
+        visitedAreas: string[];
+    };
 }
 export interface PvPState {
     enabled: boolean;
@@ -413,5 +428,138 @@ export type MenuState = {
 export interface CommandResult {
     text: string;
     clear?: boolean;
+}
+export type AchievementCategory = 'combat' | 'exploration' | 'social' | 'crafting' | 'collection' | 'pvp' | 'dungeon';
+export interface AchievementDef {
+    id: string;
+    name: string;
+    description: string;
+    category: AchievementCategory;
+    icon: string;
+    points: number;
+    trigger: AchievementTrigger;
+    reward?: {
+        gold?: number;
+        exp?: number;
+        itemId?: string;
+    };
+}
+export type AchievementTrigger = {
+    type: 'kill_count';
+    enemyType?: string;
+    count: number;
+} | {
+    type: 'boss_kills';
+    count: number;
+} | {
+    type: 'area_visit';
+    areaId: string;
+} | {
+    type: 'dungeon_clear';
+    dungeonId: string;
+} | {
+    type: 'level_reach';
+    level: number;
+} | {
+    type: 'gold_earn';
+    amount: number;
+} | {
+    type: 'pvp_kills';
+    count: number;
+} | {
+    type: 'trade_count';
+    count: number;
+} | {
+    type: 'craft_count';
+    count: number;
+} | {
+    type: 'gather_count';
+    count: number;
+} | {
+    type: 'item_equip';
+    itemRarity: Rarity;
+} | {
+    type: 'world_boss_kill';
+    bossId: string;
+} | {
+    type: 'dungeon_floor';
+    dungeonId: string;
+    floor: number;
+} | {
+    type: 'party_size';
+    size: number;
+} | {
+    type: 'login_days';
+    days: number;
+};
+export interface UnlockedAchievement {
+    id: string;
+    unlockedAt: number;
+}
+export interface WorldBossDef {
+    id: string;
+    name: string;
+    level: number;
+    maxHp: number;
+    attack: number;
+    strength: number;
+    agility: number;
+    defense: number;
+    expReward: number;
+    goldReward: number;
+    dropTableId: string;
+    spawnIntervalMinutes: number;
+    minPlayersRequired: number;
+    broadcastRadius: 'server' | 'region' | 'area';
+}
+export interface WorldBossEvent {
+    bossId: string;
+    areaId: string;
+    startedAt: number;
+    expiresAt: number;
+    participants: string[];
+    damageDealt: Map<string, number>;
+    currentHp: number;
+    maxHp: number;
+    isActive: boolean;
+}
+export interface PvPParticipant {
+    playerId: string;
+    playerName: string;
+    hp: number;
+    maxHp: number;
+    mana: number;
+    maxMana: number;
+    attack: number;
+    strength: number;
+    agility: number;
+    critRate: number;
+    critDamage: number;
+    defense: number;
+    statusEffects: StatusEffect[];
+    isPlayer: true;
+}
+export interface PvPCombatSession {
+    sessionId: string;
+    attackerId: string;
+    defenderId: string;
+    areaId: string;
+    participants: PvPParticipant[];
+    turnIndex: number;
+    round: number;
+    log: CombatLogEntry[];
+    turnStartedAt: number;
+    turnTimeoutMs: number;
+    winner?: 'attacker' | 'defender';
+    isActive: boolean;
+}
+export interface ServerStats {
+    onlinePlayers: number;
+    totalPlayers: number;
+    uptime: number;
+    version: string;
+    activeBossEvents: number;
+    activePvPSessions: number;
+    memoryUsageMb: number;
 }
 //# sourceMappingURL=types.d.ts.map

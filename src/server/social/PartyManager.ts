@@ -124,6 +124,10 @@ class PartyManager {
     return this.parties.get(partyId);
   }
 
+  getAllParties(): Party[] {
+    return [...this.parties.values()];
+  }
+
   getPartyOf(playerId: string): Party | undefined {
     const partyId = this.playerParty.get(playerId);
     return partyId ? this.parties.get(partyId) : undefined;

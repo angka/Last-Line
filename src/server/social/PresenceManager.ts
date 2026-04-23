@@ -33,6 +33,11 @@ class PresenceManager {
     return this.sessions.get(playerId);
   }
 
+  /** Phase 8: iterate all sessions (for leaderboard) */
+  getAllSessions(): Map<string, GameSession> {
+    return this.sessions;
+  }
+
   getSessionBySocket(sessionId: string): GameSession | undefined {
     const pid = this.socketToPlayer.get(sessionId);
     return pid ? this.sessions.get(pid) : undefined;

@@ -97,3 +97,98 @@ export function getPrevFloorArea(areaId: string): string | null {
   if (!info || info.floor <= 1) return null; // already at entrance floor
   return info.dungeon.floors[info.floor - 2].areaId; // floor is 1-indexed, arrays are 0-indexed
 }
+
+// ─── Infinite Dungeon Floors (Phase 8) ────────────────────────────────────────
+// After defeating the boss on the final floor, players can continue deeper.
+// Infinite floors are pseudo-areas: __inf__<dungeonId>__<floor>
+
+export const INFINITE_FLOOR_PREFIX = '__inf__';
+
+export function isInfiniteFloor(areaId: string): boolean {
+  return areaId.startsWith(INFINITE_FLOOR_PREFIX);
+}
+
+export function getInfiniteFloorInfo(areaId: string): { dungeon: DungeonDef; infiniteFloor: number } | null {
+  if (!isInfiniteFloor(areaId)) return null;
+  // format: __inf__<dungeonId>__<floor>
+  const parts = areaId.split('__');
+  if (parts.length < 4) return null;
+  const dungeonId = parts[2];
+  const infiniteFloor = parseInt(parts[3]);
+  const dungeon = DUNGEONS[dungeonId];
+  if (!dungeon) return null;
+  return { dungeon, infiniteFloor };
+}
+
+export function getNextInfiniteFloorArea(areaId: string): string | null {
+  const info = getInfiniteFloorInfo(areaId);
+  if (!info) return null;
+  // Max infinite depth of 50
+  if (info.infiniteFloor >= 50) return null;
+  return `${INFINITE_FLOOR_PREFIX}${info.dungeon.id}__${info.infiniteFloor + 1}`;
+}
+
+export function getPrevInfiniteFloorArea(areaId: string): string | null {
+  const info = getInfiniteFloorInfo(areaId);
+  if (!info) return null;
+  if (info.infiniteFloor <= 1) return null;
+  return `${INFINITE_FLOOR_PREFIX}${info.dungeon.id}__${info.infiniteFloor - 1}`;
+}
+
+// Get the previous area (handles both normal and infinite floors)
+export function getPrevFloorArea2(areaId: string): string | null {
+  // First check if it's an infinite floor
+  const info = getInfiniteFloorInfo(areaId);
+  if (info) {
+    // If at infinite floor 1, go back to the dungeon last floor
+    if (info.infiniteFloor === 1) {
+      const lastFloorIdx = info.dungeon.floors.length - 1;
+      return info.dungeon.floors[lastFloorIdx].areaId;
+    }
+    return getPrevInfiniteFloorArea(areaId);
+  }
+  // Normal floor
+  return getPrevFloorArea(areaId);
+}
+
+// Get the next area (handles both normal and infinite floors)
+export function getNextFloorArea2(areaId: string): string | null {
+  // First check normal next floor
+  const normalNext = getNextFloorArea(areaId);
+  if (normalNext) return normalNext;
+
+  // Check if at a normal last floor — transition to infinite
+  const floorInfo = getDungeonFloor(areaId);
+  if (floorInfo) {
+    const dungeon = floorInfo.dungeon;
+    const lastFloorIdx = dungeon.floors.length - 1;
+    // Are we at the last floor?
+    if (floorInfo.floor === dungeon.floors.length) {
+      // Transition to infinite floor 1
+      return `${INFINITE_FLOOR_PREFIX}${dungeon.id}__1`;
+    }
+  }
+  return null;
+}
+
+export function describeInfiniteFloor(dungeon: DungeonDef, infiniteFloor: number): string {
+  const depth = infiniteFloor - dungeon.floors.length;
+  const tier = depth <= 2 ? 'Challenging' : depth <= 5 ? 'Perilous' : depth <= 10 ? 'Nightmarish' : 'Abyssal';
+  const baseLevel = dungeon.floors[dungeon.floors.length - 1].areaId;
+  const dungeonDef = dungeon;
+  const level = Math.min(99, 30 + depth * 3);
+
+  return [
+    `  ╔═══════════════════════════════════════════════════════╗`,
+    `  ║  ${dungeon.name.toUpperCase()} — INFINITE DEPTH                      ║`,
+    `  ╠═══════════════════════════════════════════════════════╣`,
+    `  ║  Deep Floor ${String(infiniteFloor).padStart(2)} / ???    [${tier.padEnd(12)}]        ║`,
+    `  ║  ──────────────────────────────────────────────────   ║`,
+    `  ║  The air grows cold. Shadows move in the depths.     ║`,
+    `  ║  Enemies here are level ${String(level).padStart(2)}+ — deadly.         ║`,
+    `  ║  Boss has been vanquished. Deeper floors yield riches. ║`,
+    `  ╠═══════════════════════════════════════════════════════╣`,
+    `  ║  Exits: south (back up)                               ║`,
+    `  ╚═══════════════════════════════════════════════════════╝`,
+  ].join('\n');
+}

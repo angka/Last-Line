@@ -12,9 +12,17 @@ import { startSoloTurnTimer, handleSoloTimeout, createPartyCombatSession, checkP
 import { startPartyTurnTimer as startPartyTimer2 } from './engine/CombatTimerEngine';
 import { getPartyCombat, isInPartyCombat, executePartyAction, startPartyCombat, getPartyCombatForArea, broadcastTurnStart, activePartyCombats } from './engine/PartyCombatManager';
 import { checkVictory, advanceTurn, formatCombatState, formatCombatPrompt, resolveVictory, resolveDefeat, createCombatSession } from './engine/CombatEngine';
+import { worldBossEngine } from './engine/WorldBossEngine';
+import { worldBossCombatEngine } from './engine/WorldBossCombatEngine';
+import { pvpManager, applyPvPDeathPenalty, applyPvPVictoryReward } from './social/PvPManager';
+import { startAdminApi } from './api/AdminApi';
 import { v4 as uuid } from 'uuid';
 
 const PORT = 8080;
+
+// ─── PvP Sessions (Phase 7) ──────────────────────────────────────────────────
+
+const pvpSessions = new Map<string, string>(); // playerId → sessionId
 
 // ─── Session Map ──────────────────────────────────────────────────────────────
 
@@ -245,6 +253,140 @@ wss.on('connection', (socket, _req) => {
         return;
       }
 
+      // ── Phase 7: PvP Combat ─────────────────────────────────────────────
+      const pvpSession = pvpManager.getSessionForPlayer(session.playerId);
+      if (pvpSession) {
+        const cmd = msg.cmd.trim().toLowerCase();
+
+        // PvP attack
+        if (cmd === 'attack' || cmd.startsWith('attack ')) {
+          const result = pvpManager.pvpAttack(pvpSession.sessionId, session.playerId);
+          if (!result) {
+            socket.send(JSON.stringify({ type: 'output', text: 'PvP error.' }));
+            return;
+          }
+          socket.send(JSON.stringify({ type: 'output', text: result.text }));
+
+          // Resolve PvP victory/defeat
+          if (!result.session.isActive && result.session.winner) {
+            const winnerId = result.session.winner === 'attacker' ? result.session.attackerId : result.session.defenderId;
+            const loserId = winnerId === result.session.attackerId ? result.session.defenderId : result.session.attackerId;
+
+            const winnerSession = sessions.get([...sessions.entries()].find(([, s]) => s.playerId === winnerId)?.[0] ?? '');
+            const loserSession = sessions.get([...sessions.entries()].find(([, s]) => s.playerId === loserId)?.[0] ?? '');
+
+            if (winnerSession) {
+              const loserSave = loserSession?.currentState;
+              const rewardSave = loserSave ? applyPvPVictoryReward(winnerSession.currentState, loserSave) : winnerSession.currentState;
+              winnerSession.currentState = rewardSave;
+              const loserMsg = loserId === session.playerId
+                ? `\n  🏆 YOU WON THE PvP!`
+                : `\n  You defeated ${loserSave?.stats.name ?? 'your opponent'}!`;
+              trySend(winnerSession.socket, { type: 'output', text: result.text + loserMsg });
+            }
+            if (loserSession && loserId === session.playerId) {
+              const penaltySave = applyPvPDeathPenalty(loserSession.currentState);
+              loserSession.currentState = penaltySave;
+              trySend(loserSession.socket, { type: 'output', text: result.text + '\n  ☠ You were defeated in PvP! (5% gold lost)' });
+            }
+
+            pvpManager.endSession(pvpSession.sessionId);
+          }
+          return;
+        }
+
+        // PvP flee
+        if (cmd === 'flee') {
+          const result = pvpManager.pvpFlee(pvpSession.sessionId, session.playerId);
+          if (!result) {
+            socket.send(JSON.stringify({ type: 'output', text: 'Cannot flee.' }));
+            return;
+          }
+          pvpSessions.delete(session.playerId);
+          if (result.session.defenderId !== session.playerId) {
+            const otherId = result.session.defenderId;
+            const otherEntry = [...sessions.entries()].find(([, s]) => s.playerId === otherId);
+            if (otherEntry) {
+              pvpSessions.delete(otherId);
+              trySend(otherEntry[1].socket, { type: 'output', text: `\n  🏃 Your opponent fled! You win by default.` });
+            }
+          }
+          socket.send(JSON.stringify({ type: 'output', text: result.fled ? 'You fled from PvP!' : result.text }));
+          return;
+        }
+
+        // PvP log
+        if (cmd === 'log') {
+          const s = pvpManager.getSessionForPlayer(session.playerId);
+          socket.send(JSON.stringify({ type: 'output', text: s ? pvpManager.getSessionForPlayer(session.playerId)?.isActive ? pvpManager.getSessionForPlayer(session.playerId)?.participants ? pvpManager.getSessionForPlayer(session.playerId)?.round?.toString() ?? '' : '' : '' : 'No PvP combat.' }));
+          return;
+        }
+
+        // Allow other commands during PvP (not in direct combat)
+        socket.send(JSON.stringify({ type: 'output', text: 'PvP combat in progress. Use: attack / flee / log.' }));
+        return;
+      }
+
+      // ── Check PvP initiation: attack <playername> ───────────────────────
+      const attackParts = msg.cmd.trim().split(/\s+/);
+      if ((attackParts[0] === 'attack' || attackParts[0] === 'a') && attackParts.length >= 2) {
+        const targetName = attackParts.slice(1).join(' ');
+        const targetEntry = presenceManager.getSessionByPlayerName(targetName);
+        if (targetEntry) {
+          const targetSave = targetEntry.currentState;
+          if (pvpManager.canPvP(session.currentState, targetSave)) {
+            // Can't attack party members
+            if (session.currentState.partyId && session.currentState.partyId === targetSave.partyId) {
+              socket.send(JSON.stringify({ type: 'output', text: 'You cannot attack party members.' }));
+              return;
+            }
+            const pvpResult = pvpManager.startPvPCombat(
+              session.playerId, session.currentState,
+              targetEntry.playerId, targetSave,
+              session.currentState.worldState.currentArea,
+            );
+            if (pvpResult) {
+              pvpSessions.set(session.playerId, pvpResult.session.sessionId);
+              pvpSessions.set(targetEntry.playerId, pvpResult.session.sessionId);
+              const notifyText = `\n  ⚔ PvP CHALLENGE: ${session.currentState.stats.name} has challenged you to PvP combat!`;
+              trySend(targetEntry.socket, { type: 'output', text: pvpResult.attackerText + notifyText });
+              socket.send(JSON.stringify({ type: 'output', text: pvpResult.attackerText }));
+              presenceManager.broadcastToArea(
+                session.currentState.worldState.currentArea,
+                `⚔ PvP: ${session.currentState.stats.name} vs ${targetSave.stats.name}!`,
+                session.playerId,
+              );
+              return;
+            }
+          } else {
+            socket.send(JSON.stringify({ type: 'output', text: `Cannot attack ${targetName}: both players must have PvP enabled and be outside safe zones.` }));
+            return;
+          }
+        }
+      }
+
+      // ── Phase 8: World Boss Combat ───────────────────────────────────────
+      const cmdLower = msg.cmd.trim().toLowerCase();
+      if (cmdLower === 'worldboss attack' || cmdLower.startsWith('worldboss attack ')) {
+        const attackResult = worldBossCombatEngine.playerAttack(session.playerId, session.currentState);
+        if (!attackResult) {
+          socket.send(JSON.stringify({ type: 'output', text: 'No active world boss here. Use "worldboss join" to travel to the boss location.' }));
+          return;
+        }
+        if (attackResult.newSave) session.currentState = attackResult.newSave;
+        socket.send(JSON.stringify({ type: 'output', text: attackResult.text }));
+        return;
+      }
+      if (cmdLower === 'worldboss flee' || cmdLower.startsWith('worldboss flee ')) {
+        const fleeResult = worldBossCombatEngine.playerFlee(session.playerId);
+        if (!fleeResult) {
+          socket.send(JSON.stringify({ type: 'output', text: 'You are not in a world boss fight.' }));
+          return;
+        }
+        socket.send(JSON.stringify({ type: 'output', text: fleeResult.text }));
+        return;
+      }
+
       const result = parseCommand(msg.cmd, session.currentState, session.combatState, session.sessionId, session.playerId);
 
       const newSave = result.newSave ?? session.currentState;
@@ -307,7 +449,11 @@ wss.on('connection', (socket, _req) => {
         sessions.delete(sessionId);
         socket.close();
       } else {
-        socket.send(JSON.stringify({ type: 'output', text: result.text }));
+        // Phase 8: send achievement unlock notifications alongside output
+        const outputText = result.achievementUnlocks?.length
+          ? result.text + '\n' + (result.achievementUnlocks.join('\n'))
+          : result.text;
+        socket.send(JSON.stringify({ type: 'output', text: outputText }));
       }
     }
   });
@@ -455,7 +601,22 @@ function formatPartyCombatStateDisplay(session: any, playerId: string): string {
   return lines.join('\n');
 }
 
-console.log(`[Server] Phase 6: Skill Polish, Support Skills & Party Combat ready.`);
+console.log(`[Server] Phase 7: Achievements, World Bosses & PvP Combat ready.`);
+
+// ─── Phase 7: World Boss Rotation & Admin API ────────────────────────────────
+
+worldBossEngine.startRotationScheduler();
+console.log('[Server] World Boss rotation scheduler started.');
+
+// Admin API (optional — starts on port 3001 by default)
+try {
+  startAdminApi();
+} catch (err) {
+  console.warn('[AdminAPI] Failed to start admin API (Express may not be installed):', err instanceof Error ? err.message : err);
+}
+
+// ─── Export sessions for Admin API ────────────────────────────────────────────
+export { sessions };
 
 // ─── Party combat timer callback ───────────────────────────────────────────────
 

@@ -118,6 +118,27 @@ export function createDefaultSave(playerName: string): SaveFile {
     },
     pvp: { enabled: false, safeZone: true },
     regenState: 'city',
+    achievements: [],
+    achievementStats: {
+      totalKills: 0,
+      bossKills: 0,
+      tradesCompleted: 0,
+      itemsCrafted: 0,
+      resourcesGathered: 0,
+      pvpKills: 0,
+      worldBossKills: 0,
+      dungeonsCleared: [],
+      deepestFloors: {},
+      visitedAreas: ['ashford_village_square'],
+    },
+    pvpStats: {
+      kills: 0,
+      deaths: 0,
+      winStreak: 0,
+      bestStreak: 0,
+      seasonWins: 0,
+      seasonPoints: 1000, // starting ELO
+    },
   };
 }
 

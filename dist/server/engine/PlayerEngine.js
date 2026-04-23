@@ -116,6 +116,19 @@ function createDefaultSave(playerName) {
         },
         pvp: { enabled: false, safeZone: true },
         regenState: 'city',
+        achievements: [],
+        achievementStats: {
+            totalKills: 0,
+            bossKills: 0,
+            tradesCompleted: 0,
+            itemsCrafted: 0,
+            resourcesGathered: 0,
+            pvpKills: 0,
+            worldBossKills: 0,
+            dungeonsCleared: [],
+            deepestFloors: {},
+            visitedAreas: ['ashford_village_square'],
+        },
     };
 }
 // ─── Combat Stats ───────────────────────────────────────────────────────────────

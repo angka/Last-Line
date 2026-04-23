@@ -12,6 +12,7 @@ declare class PartyManager {
     removeMember(partyId: string, playerId: string): Party | null;
     disband(partyId: string): void;
     getParty(partyId: string): Party | undefined;
+    getAllParties(): Party[];
     getPartyOf(playerId: string): Party | undefined;
     getPartyMembers(playerId: string): PartyMember[];
     isInParty(playerId: string): boolean;

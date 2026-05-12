@@ -1,0 +1,35 @@
+{
+  "bonus_xp_weekend": {
+    "id": "bonus_xp_weekend",
+    "title": "2x EXP Weekend",
+    "description": "All combat rewards double experience points this weekend!",
+    "startTime": "2026-05-15T00:00:00Z",
+    "endTime": "2026-05-17T23:59:59Z",
+    "type": "bonus_exp",
+    "effects": { "expMultiplier": 2.0 },
+    "icon": "star"
+  },
+  "rare_drop_event": {
+    "id": "rare_drop_event",
+    "title": "Rare Drop Festival",
+    "description": "Rare item drop rates increased by 50%!",
+    "startTime": "2026-05-20T00:00:00Z",
+    "endTime": "2026-05-22T23:59:59Z",
+    "type": "drop_modifier",
+    "effects": { "dropMultiplier": 1.5 },
+    "icon": "gem"
+  },
+  "world_boss_invasion": {
+    "id": "world_boss_invasion",
+    "title": "Dragon Invasion",
+    "description": "A powerful dragon has appeared in the Thornwood!",
+    "startTime": "2026-05-25T18:00:00Z",
+    "endTime": "2026-05-25T22:00:00Z",
+    "type": "enemy_spawn",
+    "effects": {
+      "spawnEnemyId": "ancient_red_dragon",
+      "spawnAreaId": "thornwood_edge"
+    },
+    "icon": "dragon"
+  }
+}

@@ -19,6 +19,7 @@ import { worldBossCombatEngine } from './engine/WorldBossCombatEngine';
 import { pvpManager, applyPvPDeathPenalty, applyPvPVictoryReward } from './social/PvPManager';
 import { startAdminApi } from './api/AdminApi';
 import { isPlayerBanned } from './persistence/AdminDbManager';
+import { loadEvents, checkActiveEvents } from './content/EventEngine';
 import { v4 as uuid } from 'uuid';
 
 const PORT = 8080;
@@ -48,6 +49,15 @@ console.log(`[Server] WebSocket listening on ws://localhost:${PORT}`);
 
 // Load game content catalogs
 loadAllCatalogs();
+
+// Load and check game events
+loadEvents();
+checkActiveEvents();
+
+// Set up periodic event check (every 60 seconds)
+setInterval(() => {
+  checkActiveEvents();
+}, 60000);
 
 // Start content hot-reload watcher (dev mode only)
 startWatcher(process.env.NODE_ENV !== 'production');

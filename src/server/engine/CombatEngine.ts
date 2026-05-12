@@ -5,6 +5,7 @@ import { PHYSICAL_SKILLS, MAGIC_SKILLS, SUPPORT_SKILLS, getSkillLevelMultiplier,
 import { getDungeonForArea } from '../../data/dungeons';
 import { computeAttack, levelUp, calcExpToNext } from './PlayerEngine';
 import { rollBossLoot, rollScrollDrops, rollRegularLoot, getDungeonTier, formatLootDrops, addLootToPending } from './LootEngine';
+import { getExpMultiplier, getGoldMultiplier } from '../content/EventEngine';
 import { v4 as uuid } from 'uuid';
 
 // ─── Encounter Generation ───────────────────────────────────────────────────
@@ -266,7 +267,13 @@ export function resolveVictory(
       ?? getEnemy(enemy.id)?.goldReward ?? 0;
   }
 
-  s.stats = { ...s.stats, exp: s.stats.exp + totalExp, gold: s.stats.gold + totalGold };
+  // Apply event multipliers
+  const expMultiplier = getExpMultiplier();
+  const goldMultiplier = getGoldMultiplier();
+  const actualExp = Math.floor(totalExp * expMultiplier);
+  const actualGold = Math.floor(totalGold * goldMultiplier);
+
+  s.stats = { ...s.stats, exp: s.stats.exp + actualExp, gold: s.stats.gold + actualGold };
 
   // Level up check
   const levelUps: string[] = [];
@@ -307,9 +314,12 @@ export function resolveVictory(
   ╔══════════════════════════════════════════════════════╗
   ║  VICTORY!                                           ║
   ╠══════════════════════════════════════════════════════╣
-  ║  +${String(totalExp).padStart(6)} EXP   +${String(totalGold).padStart(6)} Gold                ║
+  ║  +${String(actualExp).padStart(6)} EXP   +${String(actualGold).padStart(6)} Gold                ║
   ╚══════════════════════════════════════════════════════╝`;
   if (levelUps.length) lines += '\n' + levelUps.join('\n');
+  if (expMultiplier > 1 || goldMultiplier > 1) {
+    lines += `\n  [Event Bonus: EXP x${expMultiplier} | Gold x${goldMultiplier}]`;
+  }
   lines += formatLootDrops(lootDrops);
   return s;
 }

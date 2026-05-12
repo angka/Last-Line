@@ -16,6 +16,7 @@ import { worldBossEngine } from './engine/WorldBossEngine';
 import { worldBossCombatEngine } from './engine/WorldBossCombatEngine';
 import { pvpManager, applyPvPDeathPenalty, applyPvPVictoryReward } from './social/PvPManager';
 import { startAdminApi } from './api/AdminApi';
+import { isPlayerBanned } from './persistence/AdminDbManager';
 import { v4 as uuid } from 'uuid';
 
 const PORT = 8080;
@@ -43,29 +44,247 @@ function broadcastPush(session: GameSession, channel: string, text: string): voi
 const wss = new WebSocketServer({ port: PORT });
 console.log(`[Server] WebSocket listening on ws://localhost:${PORT}`);
 
-wss.on('connection', (socket, _req) => {
+wss.on('connection', async (socket, _req) => {
   const sessionId = uuid();
 
   socket.on('message', async (data: Buffer) => {
     const msg = JSON.parse(data.toString());
     const session = sessions.get(sessionId);
 
-    // ── Registration ──────────────────────────────────────────────────────
+    // ── Player Auth: Login ──────────────────────────────────────────────────
+    if (msg.type === 'auth_login') {
+      const { username, password } = msg;
+      const { loginPlayer } = await import('./auth/PlayerAuthService');
+      const result = await loginPlayer(username ?? '', password ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'auth_error', text: result.error ?? 'Login failed.' }));
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: 'auth_success',
+        playerId: result.playerId,
+        username: result.username,
+        token: result.token,
+      }));
+      return;
+    }
+
+    // ── Player Auth: Register ───────────────────────────────────────────────
+    if (msg.type === 'auth_register') {
+      const { username, email, password } = msg;
+      const { registerPlayer } = await import('./auth/PlayerAuthService');
+      const result = await registerPlayer(username ?? '', email ?? '', password ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'auth_error', text: result.error ?? 'Registration failed.' }));
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: 'auth_success',
+        playerId: result.playerId,
+        username: username,
+        token: result.token,
+      }));
+      return;
+    }
+
+    // ── Player Auth: Logout ─────────────────────────────────────────────────
+    if (msg.type === 'logout') {
+      const { token } = msg;
+      if (token) {
+        const { logoutPlayer } = await import('./auth/PlayerAuthService');
+        await logoutPlayer(token).catch(() => {});
+      }
+      socket.send(JSON.stringify({ type: 'logged_out' }));
+      return;
+    }
+
+    // ── Steam Auth (Phase 11) ───────────────────────────────────────────────
+    if (msg.type === 'steam_auth') {
+      const { steamAuth } = await import('./auth/PlayerAuthService');
+      const result = await steamAuth(msg.ticket ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'steam_error', text: result.error ?? 'Steam auth failed.' }));
+        return;
+      }
+      if (result.needsLinking) {
+        socket.send(JSON.stringify({ type: 'steam_link_prompt', steamId: result.steamId }));
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: 'steam_success',
+        playerId: result.playerId,
+        steamId: result.steamId,
+        token: result.token,
+      }));
+      return;
+    }
+
+    // ── Token Validation for connect/load_save ────────────────────────────
+    let validatedPlayerId: string | null = null;
+    let validatedUsername: string | null = null;
+    if (msg.token) {
+      const { validateToken } = await import('./auth/PlayerAuthService');
+      const auth = await validateToken(msg.token);
+      if (auth) {
+        validatedPlayerId = auth.playerId;
+        validatedUsername = auth.username;
+      }
+    }
+
+    // ── Steam Link (Phase 11 - after token validation) ────────────────────
+    if (msg.type === 'steam_link') {
+      if (!validatedPlayerId) {
+        socket.send(JSON.stringify({ type: 'error', text: 'Please login first.' }));
+        return;
+      }
+      const { linkSteamAccount } = await import('./auth/PlayerAuthService');
+      const result = await linkSteamAccount(validatedPlayerId, msg.ticket ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'error', text: result.error ?? 'Link failed.' }));
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'steam_linked', steamId: result.steamId }));
+      return;
+    }
+
+    // ── Steam Unlink ────────────────────────────────────────────────────────
+    if (msg.type === 'steam_unlink') {
+      if (!validatedPlayerId) {
+        socket.send(JSON.stringify({ type: 'error', text: 'Please login first.' }));
+        return;
+      }
+      const { unlinkSteamAccount } = await import('./auth/PlayerAuthService');
+      const result = await unlinkSteamAccount(validatedPlayerId);
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'error', text: result.error ?? 'Unlink failed.' }));
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'steam_unlinked' }));
+      return;
+    }
+
+    // ── Store Sync ──────────────────────────────────────────────────────────
+    if (msg.type === 'store_sync') {
+      if (!session) {
+        socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
+        return;
+      }
+      const { getStoreSync } = await import('./store/CosmeticStore');
+      const storeData = await getStoreSync(session.playerId);
+      socket.send(JSON.stringify({ type: 'store_data', ...storeData }));
+      return;
+    }
+
+    // ── Purchase Cosmetic ───────────────────────────────────────────────────
+    if (msg.type === 'purchase_cosmetic') {
+      if (!session) {
+        socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
+        return;
+      }
+      const { purchaseCosmetic } = await import('./store/CosmeticStore');
+      const result = await purchaseCosmetic(session.playerId, msg.cosmeticId ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'purchase_error', text: result.error }));
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'purchase_success', cosmeticId: msg.cosmeticId }));
+      return;
+    }
+
+    // ── Equip Cosmetic ──────────────────────────────────────────────────────
+    if (msg.type === 'equip_cosmetic') {
+      if (!session) {
+        socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
+        return;
+      }
+      const { equipCosmetic } = await import('./store/CosmeticStore');
+      const result = await equipCosmetic(session.playerId, msg.cosmeticId ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'error', text: result.error }));
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'cosmetic_equipped', cosmeticId: msg.cosmeticId }));
+      return;
+    }
+
+    // ── Claim Reward ────────────────────────────────────────────────────────
+    if (msg.type === 'claim_reward') {
+      if (!session) {
+        socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
+        return;
+      }
+      const { claimPlayerReward } = await import('./store/CosmeticStore');
+      const result = await claimPlayerReward(session.playerId, msg.rewardId ?? '');
+      if (!result.success) {
+        socket.send(JSON.stringify({ type: 'error', text: result.error }));
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'reward_claimed', rewardId: msg.rewardId, cosmeticId: result.cosmeticId }));
+      return;
+    }
+
+    // ── Shop (open browser) ─────────────────────────────────────────────────
+    if (msg.type === 'shop') {
+      if (!session) {
+        socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
+        return;
+      }
+      const storeUrl = `file://${__dirname}/../../store/index.html`;
+      socket.send(JSON.stringify({ type: 'store_url', url: storeUrl }));
+      try {
+        const { exec } = require('child_process');
+        if (process.platform === 'win32') {
+          exec(`start "" "${storeUrl}"`);
+        } else if (process.platform === 'darwin') {
+          exec(`open "${storeUrl}"`);
+        } else {
+          exec(`xdg-open "${storeUrl}"`);
+        }
+      } catch { /* ignore */ }
+      return;
+    }
+
+    // ── Registration (after auth) ─────────────────────────────────────────
     if (msg.type === 'register') {
-      const { playerId: pid, name, slot } = msg;
+      const pid = validatedPlayerId ?? msg.playerId;
+      if (!pid) {
+        socket.send(JSON.stringify({ type: 'auth_required', text: 'Please login or register first.' }));
+        return;
+      }
+
+      // Phase 10: Check if player is banned
+      const banned = await isPlayerBanned(pid);
+      if (banned) {
+        socket.send(JSON.stringify({
+          type: 'auth_error',
+          text: '⚠ Your account has been suspended. Contact an administrator.',
+        }));
+        socket.close();
+        return;
+      }
+
+      const name = validatedUsername ?? msg.name ?? 'Unknown';
       let newSave = createDefaultSave(name);
-      newSave.playerId = pid; // wire playerId into save
-      newSave = inventoryAdd(newSave, 'wooden_sword', 1).save;
-      newSave = inventoryAdd(newSave, 'tattered_cloth', 1).save;
-      newSave = inventoryAdd(newSave, 'health_potion_1', 3).save;
+      newSave.playerId = pid;
+      newSave.playerName = name;
+
+      // Only add starter items on first connect (new character)
+      const slot = msg.slot ?? 1;
+      const existingSave = await loadSave(pid, slot);
+      if (!existingSave) {
+        newSave = inventoryAdd(newSave, 'wooden_sword', 1).save;
+        newSave = inventoryAdd(newSave, 'tattered_cloth', 1).save;
+        newSave = inventoryAdd(newSave, 'health_potion_1', 3).save;
+      }
+
       await registerPlayer(pid, name);
-      await saveSave(pid, slot ?? 1, newSave, 0);
+      await saveSave(pid, slot, newSave, 0);
 
       const newSession: GameSession = {
         sessionId,
         socket,
         playerId: pid,
-        saveSlot: slot ?? 1,
+        saveSlot: slot,
         currentState: newSave,
         connectedAt: new Date(),
         lastActivity: new Date(),
@@ -92,8 +311,25 @@ wss.on('connection', (socket, _req) => {
 
     // ── Load ─────────────────────────────────────────────────────────────
     if (msg.type === 'load') {
-      const { playerId: pid, slot } = msg;
-      const save = await loadSave(pid, slot ?? 1);
+      const pid = validatedPlayerId ?? msg.playerId;
+      if (!pid) {
+        socket.send(JSON.stringify({ type: 'auth_required', text: 'Please login or register first.' }));
+        return;
+      }
+
+      // Phase 10: Check if player is banned
+      const banned = await isPlayerBanned(pid);
+      if (banned) {
+        socket.send(JSON.stringify({
+          type: 'auth_error',
+          text: '⚠ Your account has been suspended. Contact an administrator.',
+        }));
+        socket.close();
+        return;
+      }
+
+      const slot = msg.slot ?? 1;
+      const save = await loadSave(pid, slot);
       if (!save) {
         socket.send(JSON.stringify({ type: 'error', text: 'No save found in that slot.' }));
         return;
@@ -103,7 +339,7 @@ wss.on('connection', (socket, _req) => {
         sessionId,
         socket,
         playerId: pid,
-        saveSlot: slot ?? 1,
+        saveSlot: slot,
         currentState: save,
         connectedAt: new Date(),
         lastActivity: new Date(),
@@ -243,7 +479,7 @@ wss.on('connection', (socket, _req) => {
         }
         // Allow non-combat commands through during party combat
         if (!isCombatCommand(msg.cmd)) {
-          const result = parseCommand(msg.cmd, session.currentState, undefined, session.sessionId, session.playerId);
+          const result = await parseCommand(msg.cmd, session.currentState, undefined, session.sessionId, session.playerId);
           session.currentState = result.newSave ?? session.currentState;
           if (result.action === 'save') await saveSave(session.playerId, session.saveSlot, session.currentState, 0);
           socket.send(JSON.stringify({ type: 'output', text: result.text }));
@@ -340,7 +576,7 @@ wss.on('connection', (socket, _req) => {
               socket.send(JSON.stringify({ type: 'output', text: 'You cannot attack party members.' }));
               return;
             }
-            const pvpResult = pvpManager.startPvPCombat(
+            const pvpResult = await pvpManager.startPvPCombat(
               session.playerId, session.currentState,
               targetEntry.playerId, targetSave,
               session.currentState.worldState.currentArea,
@@ -387,7 +623,7 @@ wss.on('connection', (socket, _req) => {
         return;
       }
 
-      const result = parseCommand(msg.cmd, session.currentState, session.combatState, session.sessionId, session.playerId);
+      const result = await parseCommand(msg.cmd, session.currentState, session.combatState, session.sessionId, session.playerId);
 
       const newSave = result.newSave ?? session.currentState;
       session.currentState = newSave;

@@ -136,16 +136,12 @@ function seedDefaultCosmetics(db: SqlJsDatabase): void {
     { id: 'inv_200', name: 'Inventory +150', category: 'skin', subcategory: 'inventory', rarity: 'uncommon', description: 'Adds 150 inventory slots.', priceUsd: 4.99 },
   ];
 
-  const stmt = db.prepare(`INSERT OR REPLACE INTO cosmetics (id, name, category, subcategory, rarity, description, price_usd, steam_product_id, effect_data, equip_slot, is_dlc, dlc_required, requires_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-
   for (const c of cosmetics) {
-    stmt.run([
-      c.id, c.name, c.category, c.subcategory ?? null, c.rarity, c.description,
-      c.priceUsd ?? null, null, c.effectData ? JSON.stringify(c.effectData) : null,
-      c.equipSlot ?? null, c.isDlc ? 1 : 0, c.dlcRequired ?? null, null, now
-    ]);
+    db.exec(`INSERT OR REPLACE INTO cosmetics (id, name, category, subcategory, rarity, description, price_usd, steam_product_id, effect_data, equip_slot, is_dlc, dlc_required, requires_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [c.id, c.name, c.category, c.subcategory ?? null, c.rarity, c.description,
+       c.priceUsd ?? null, null, c.effectData ? JSON.stringify(c.effectData) : null,
+       c.equipSlot ?? null, c.isDlc ? 1 : 0, c.dlcRequired ?? null, null, now]);
   }
-  stmt.free();
 }
 
 function seedDefaultRewards(db: SqlJsDatabase): void {
@@ -160,11 +156,10 @@ function seedDefaultRewards(db: SqlJsDatabase): void {
     { rewardId: 'reward_friends_10', cosmeticId: 'title_champion', triggerType: 'action', triggerValue: JSON.stringify({ action: 'friends_10' }), title: 'Social Butterfly', description: 'Have 10 friends!' },
   ];
 
-  const stmt = db.prepare(`INSERT OR REPLACE INTO cosmetic_rewards (reward_id, cosmetic_id, trigger_type, trigger_value, title, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
   for (const r of rewards) {
-    stmt.run([r.rewardId, r.cosmeticId, r.triggerType, r.triggerValue, r.title, r.description, now]);
+    db.exec(`INSERT OR REPLACE INTO cosmetic_rewards (reward_id, cosmetic_id, trigger_type, trigger_value, title, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [r.rewardId, r.cosmeticId, r.triggerType, r.triggerValue, r.title, r.description, now]);
   }
-  stmt.free();
 }
 
 // ─── Cosmetic CRUD ──────────────────────────────────────────────────────────────

@@ -24,6 +24,14 @@ const rl = readline.createInterface({
       'use', 'drop', 'skills', 'gold', 'rest', 'save', 'map', 'help',
       'attack', 'a', 'flee', 'f', 'item', 'i', 'log', 'quit',
       'friend', 'friends', 'block', 'shop',
+      'travel', 'inn', 'buy', 'sell',
+      'explore', 'up', 'down', 'leave', 'dungeon_status',
+      'skill', 'magic', 'learn', 'craft',
+      'gather', 'mine', 'chop', 'pick', 'fill', 'sift', 'attune',
+      'loot', 'pending_loot', 'chest',
+      'who', 'nearby', 'say', 'msg', 'whisper', 'shout',
+      'party', 'trade', 'pvp',
+      'achievements', 'worldboss', 'leaderboard', 'rank',
     ];
     const hits = cmds.filter(c => c.startsWith(line.toLowerCase()));
     return [hits.length ? hits : [], line];

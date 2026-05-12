@@ -84,7 +84,7 @@ export interface ParseResult {
   achievementUnlocks?: string[];
 }
 
-export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): ParseResult {
+export async function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): Promise<ParseResult> {
   const parts = cmd.trim().split(/\s+/);
   const verb = parts[0]?.toLowerCase();
   const args = parts.slice(1);
@@ -383,6 +383,17 @@ export function parseCommand(cmd: string, save: SaveFile, combatState?: any, _se
       return handleRank(save);
     }
 
+    // ── Phase 10: Friends ──────────────────────────────────────────────────
+    case 'friend':
+    case 'friends': {
+      return handleFriend(args, save);
+    }
+
+    // ── Phase 10: Block ───────────────────────────────────────────────────
+    case 'block': {
+      return handleBlock(args, save);
+    }
+
     default: {
       return { text: `Unknown command: "${verb}". Type 'help' for a list of commands.` };
     }
@@ -402,6 +413,20 @@ function handleMove(dir: string, save: SaveFile): ParseResult {
   }
 
   const target = getArea(targetId);
+
+  // Phase 11: DLC entitlement check
+  const dlcAreas: Record<string, string> = {
+    'deep_forest': 'dlc_forest',
+    'cave_entrance': 'dlc_cave',
+  };
+  const requiredDlc = dlcAreas[targetId];
+  if (requiredDlc) {
+    const { hasDlcEntitlement } = await import('../persistence/CosmeticDbManager');
+    const hasAccess = await hasDlcEntitlement(save.playerId, requiredDlc);
+    if (!hasAccess) {
+      return { text: `🔒 This area requires the ${requiredDlc} expansion. Visit the cosmetic store to purchase.` };
+    }
+  }
 
   // Auto-unlock city on first visit
   const isCity = target?.regenState === 'city';
@@ -1902,6 +1927,103 @@ function handleWhisper(targetName: string, text: string, save: SaveFile): ParseR
   // Deliver to target
   presenceManager.broadcastToPlayer(targetSession.playerId, `[Whisper from ${save.stats.name}]: ${text}`);
   return { text: `[Whisper to ${targetName}]: ${text}` };
+}
+
+// ─── Friends (Phase 10) ─────────────────────────────────────────────────────────
+
+import { friendManager, formatFriendsList, formatPendingRequests, formatBlockedList } from '../social/FriendManager';
+
+async function handleFriend(args: string[], save: SaveFile): Promise<ParseResult> {
+  const subcmd = args[0]?.toLowerCase();
+
+  // friend — list friends
+  if (!subcmd || subcmd === 'list') {
+    const friends = await friendManager.getFriendsList(save.playerId);
+    return { text: formatFriendsList(friends) };
+  }
+
+  // friend requests
+  if (subcmd === 'requests' || subcmd === 'pending') {
+    const requests = await friendManager.getPendingRequestsList(save.playerId);
+    return { text: formatPendingRequests(requests) };
+  }
+
+  // friend add <name>
+  if (subcmd === 'add') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: friend add <player_name>' };
+    const result = await friendManager.sendFriendRequest(save.playerId, save.stats.name, targetName);
+    return { text: result.success ? `Friend request sent to ${targetName}!` : `Error: ${result.error}` };
+  }
+
+  // friend accept <name>
+  if (subcmd === 'accept') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: friend accept <player_name>' };
+    const result = await friendManager.acceptFriend(save.playerId, save.stats.name, targetName);
+    return { text: result.success ? `You are now friends with ${targetName}!` : `Error: ${result.error}` };
+  }
+
+  // friend decline <name>
+  if (subcmd === 'decline') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: friend decline <player_name>' };
+    const result = await friendManager.declineFriend(save.playerId, targetName);
+    return { text: result.success ? `Friend request from ${targetName} declined.` : `Error: ${result.error}` };
+  }
+
+  // friend remove <name>
+  if (subcmd === 'remove' || subcmd === 'unfriend') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: friend remove <player_name>' };
+    const result = await friendManager.removeFriendRequest(save.playerId, targetName);
+    return { text: result.success ? `Removed ${targetName} from your friends list.` : `Error: ${result.error}` };
+  }
+
+  return {
+    text: `Usage: friend [list|requests|add <name>|accept <name>|decline <name>|remove <name>]
+  friend list       — view your friends list
+  friend requests   — view pending friend requests
+  friend add <name> — send a friend request
+  friend accept <name>  — accept a friend request
+  friend decline <name> — decline a friend request
+  friend remove <name>   — remove a friend`,
+  };
+}
+
+// ─── Block (Phase 10) ──────────────────────────────────────────────────────────
+
+async function handleBlock(args: string[], save: SaveFile): Promise<ParseResult> {
+  const subcmd = args[0]?.toLowerCase();
+
+  // block — list blocked
+  if (!subcmd || subcmd === 'list') {
+    const blocked = await friendManager.getBlockedList(save.playerId);
+    return { text: formatBlockedList(blocked) };
+  }
+
+  // block add <name>
+  if (subcmd === 'add') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: block add <player_name>' };
+    const result = await friendManager.blockUser(save.playerId, save.stats.name, targetName);
+    return { text: result.success ? `${targetName} has been blocked.` : `Error: ${result.error}` };
+  }
+
+  // block remove <name>
+  if (subcmd === 'remove' || subcmd === 'unblock') {
+    const targetName = args[1];
+    if (!targetName) return { text: 'Usage: block remove <player_name>' };
+    const result = await friendManager.unblockUser(save.playerId, targetName);
+    return { text: result.success ? `${targetName} has been unblocked.` : `Error: ${result.error}` };
+  }
+
+  return {
+    text: `Usage: block [list|add <name>|remove <name>]
+  block list     — view your blocked players
+  block add <name>    — block a player
+  block remove <name> — unblock a player`,
+  };
 }
 
 // ─── Shout ───────────────────────────────────────────────────────────────────

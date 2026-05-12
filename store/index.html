@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Last Line — Cosmetic Store</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    header { text-align: center; padding: 20px 0; border-bottom: 2px solid #ffd700; margin-bottom: 20px; }
+    header h1 { color: #ffd700; font-size: 28px; }
+    header span { color: #888; font-size: 14px; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tab { padding: 10px 20px; background: #1a1a2e; border: 1px solid #333; cursor: pointer; border-radius: 4px; }
+    .tab:hover { background: #252540; }
+    .tab.active { background: #ffd700; color: #0a0a0f; border-color: #ffd700; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .card { background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 16px; transition: transform 0.2s; }
+    .card:hover { transform: translateY(-4px); border-color: #ffd700; }
+    .card-icon { font-size: 48px; text-align: center; margin-bottom: 10px; }
+    .card-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+    .card-rarity { font-size: 12px; text-transform: uppercase; margin-bottom: 8px; }
+    .card-rarity.common { color: #888; }
+    .card-rarity.uncommon { color: #2ecc71; }
+    .card-rarity.rare { color: #3498db; }
+    .card-rarity.epic { color: #9b59b6; }
+    .card-rarity.legendary { color: #f39c12; }
+    .card-desc { font-size: 12px; color: #888; margin-bottom: 12px; min-height: 36px; }
+    .card-price { font-size: 18px; font-weight: bold; color: #ffd700; }
+    .card-owned { color: #2ecc71; font-size: 14px; }
+    .card-btn { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-buy { background: #ffd700; color: #0a0a0f; }
+    .btn-buy:hover { background: #e6c200; }
+    .btn-equip { background: #3498db; color: white; }
+    .btn-equipped { background: #2ecc71; color: white; cursor: default; }
+    .card.owned { border-color: #2ecc71; }
+    .player-info { background: #1a1a2e; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-radius: 4px; }
+    .slots { color: #ffd700; }
+    .rewards-section { margin-top: 30px; }
+    .rewards-section h2 { color: #ffd700; margin-bottom: 15px; }
+    .reward-card { background: #1a1a2e; border: 1px dashed #ffd700; border-radius: 8px; padding: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .reward-info { flex: 1; }
+    .reward-title { font-weight: bold; color: #ffd700; }
+    .reward-desc { font-size: 12px; color: #888; }
+    .btn-claim { background: #2ecc71; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+    .status { background: #1a1a2e; padding: 8px 16px; border-radius: 4px; color: #888; margin-bottom: 20px; }
+    .status.connected { color: #2ecc71; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚔ LAST LINE — COSMETIC STORE</h1>
+      <span>Powered by Steam</span>
+    </header>
+    <div class="status" id="status">Connecting to server...</div>
+    <div class="player-info">
+      <span id="playerName">Loading...</span>
+      <span class="slots" id="slots">Slots: --/--</span>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-category="all">All</button>
+      <button class="tab" data-category="skin">Skins</button>
+      <button class="tab" data-category="chat">Chat</button>
+      <button class="tab" data-category="title">Titles</button>
+      <button class="tab" data-category="effect">Effects</button>
+      <button class="tab" data-category="housing">Housing</button>
+      <button class="tab" data-category="reward">Rewards</button>
+    </div>
+    <div class="grid" id="items"></div>
+    <div class="rewards-section" id="rewardsSection" style="display:none;">
+      <h2>🎁 Available Rewards</h2>
+      <div id="rewards"></div>
+    </div>
+  </div>
+  <script>
+    const SERVER_URL = 'ws://localhost:8080';
+    let storeData = null;
+    let ws = null;
+    let playerToken = null;
+
+    // Get token from URL or localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    playerToken = urlParams.get('token') || localStorage.getItem('playerToken') || 'demo-token';
+
+    function connect() {
+      ws = new WebSocket(SERVER_URL);
+
+      ws.onopen = () => {
+        document.getElementById('status').textContent = 'Connected - Syncing store...';
+        document.getElementById('status').className = 'status connected';
+        // Request store data with token
+        ws.send(JSON.stringify({ type: 'store_sync', token: playerToken }));
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'store_data') {
+          storeData = msg;
+          render();
+        } else if (msg.type === 'purchase_success') {
+          alert('Purchase successful!');
+          ws.send(JSON.stringify({ type: 'store_sync', token: playerToken }));
+        } else if (msg.type === 'cosmetic_equipped') {
+          alert('Cosmetic equipped!');
+          ws.send(JSON.stringify({ type: 'store_sync', token: playerToken }));
+        } else if (msg.type === 'reward_claimed') {
+          alert('Reward claimed!');
+          ws.send(JSON.stringify({ type: 'store_sync', token: playerToken }));
+        } else if (msg.type === 'error' || msg.type === 'purchase_error') {
+          alert('Error: ' + (msg.text || 'Something went wrong'));
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        document.getElementById('status').textContent = 'Connection error - Retrying...';
+      };
+    }
+
+    function render() {
+      if (!storeData) return;
+      document.getElementById('playerName').textContent = 'Player Store';
+      document.getElementById('slots').textContent = `Inventory Slots: ${storeData.inventorySlots}`;
+
+      const category = document.querySelector('.tab.active').dataset.category;
+      let items = storeData.cosmetics;
+      if (category !== 'all') items = items.filter(c => c.category === category);
+
+      const grid = document.getElementById('items');
+      grid.innerHTML = items.map(item => {
+        const owned = storeData.ownedCosmetics.includes(item.id);
+        const equipped = storeData.equippedCosmetics[item.category] === item.id;
+        const price = item.priceUsd ? `$${item.priceUsd.toFixed(2)}` : 'FREE';
+        const icon = getIcon(item.category, item.subcategory);
+
+        return `
+          <div class="card ${owned ? 'owned' : ''}">
+            <div class="card-icon">${icon}</div>
+            <div class="card-name">${item.name}</div>
+            <div class="card-rarity ${item.rarity}">${item.rarity}</div>
+            <div class="card-desc">${item.description}</div>
+            ${owned ?
+              `<div class="card-owned">✓ Owned</div>
+               <button class="card-btn ${equipped ? 'btn-equipped' : 'btn-equip'}"
+                 onclick="equipCosmetic('${item.id}')" ${equipped ? 'disabled' : ''}>
+                 ${equipped ? 'Equipped ✓' : 'Equip'}
+               </button>` :
+              `<div class="card-price">${price}</div>
+               <button class="card-btn btn-buy" onclick="buyWithSteam('${item.id}')">Buy with Steam</button>`
+            }
+          </div>
+        `;
+      }).join('');
+
+      // Rewards
+      const rewardsSection = document.getElementById('rewardsSection');
+      if (storeData.availableRewards.length > 0 || category === 'reward') {
+        rewardsSection.style.display = 'block';
+        document.getElementById('rewards').innerHTML = storeData.availableRewards.map(r => `
+          <div class="reward-card">
+            <div class="reward-info">
+              <div class="reward-title">${r.title}</div>
+              <div class="reward-desc">${r.description}</div>
+            </div>
+            <button class="btn-claim" onclick="claimReward('${r.rewardId}')">Claim</button>
+          </div>
+        `).join('') || '<p style="color:#888;">All rewards claimed!</p>';
+      } else {
+        rewardsSection.style.display = 'none';
+      }
+    }
+
+    function getIcon(category, sub) {
+      const icons = {
+        skin: { weapon: '🗡️', armor: '🛡️', accessory: '💍' },
+        chat: { name_color: '🎨', bubble: '💬', particle: '✨' },
+        title: { prefix: '👑', suffix: '⭐' },
+        effect: { aura: '🌟', trail: '💨' },
+        housing: { decoration: '🏠' },
+        inventory: '📦'
+      };
+      return icons[category]?.[sub] || '🎁';
+    }
+
+    function buyWithSteam(cosmeticId) {
+      alert('Opening Steam store...\nIn production, this would open Steam Overlay to your store page.');
+      // In production: window.open(`steam://store/${STEAM_APP_ID}/${cosmeticId}`);
+    }
+
+    function equipCosmetic(cosmeticId) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'equip_cosmetic', cosmeticId }));
+      } else {
+        alert('Not connected to server.');
+      }
+    }
+
+    function claimReward(rewardId) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'claim_reward', rewardId }));
+      } else {
+        alert('Not connected to server.');
+      }
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        render();
+      });
+    });
+
+    connect();
+  </script>
+</body>
+</html>

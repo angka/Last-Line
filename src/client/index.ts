@@ -7,6 +7,8 @@ interface ClientState {
   socket: WebSocket;
   sessionId?: string;
   playerId: string;
+  playerName: string;
+  token: string;
   saveSlot: number;
   connected: boolean;
 }
@@ -21,6 +23,7 @@ const rl = readline.createInterface({
       'look', 'l', 'go', 'stats', 'inventory', 'inv', 'equip', 'unequip',
       'use', 'drop', 'skills', 'gold', 'rest', 'save', 'map', 'help',
       'attack', 'a', 'flee', 'f', 'item', 'i', 'log', 'quit',
+      'friend', 'friends', 'block', 'shop',
     ];
     const hits = cmds.filter(c => c.startsWith(line.toLowerCase()));
     return [hits.length ? hits : [], line];
@@ -42,33 +45,149 @@ function handleInput(cmd: string): void {
   if (!cmd.trim()) { prompt(); return; }
 
   state.socket.send(JSON.stringify({ type: 'command', cmd: cmd.trim() }));
+
+  // Phase 11: Shop command opens browser store
+  if (cmd.trim().toLowerCase() === 'shop') {
+    console.log('\n  Opening cosmetic store in browser...');
+    state.socket.send(JSON.stringify({ type: 'shop' }));
+  }
   prompt();
 }
 
-function connect(playerId: string, name: string, slot = 1): void {
+function divider(): string {
+  return '  ╔═══════════════════════════════════════════════════════════════════════╗';
+}
+
+function subDivider(): string {
+  return '  ╠═══════════════════════════════════════════════════════════════════════╣';
+}
+
+function footer(): string {
+  return '  ╚═══════════════════════════════════════════════════════════════════════╝';
+}
+
+// ─── Phase 11: Store Display ─────────────────────────────────────────────────────
+
+function displayStore(data: any): void {
+  console.log('\n' + divider());
+  console.log('  ⚔  LAST LINE — COSMETIC STORE');
+  console.log(subDivider());
+
+  const categories = ['skin', 'chat', 'title', 'effect', 'housing'];
+  for (const cat of categories) {
+    const items = data.cosmetics.filter((c: any) => c.category === cat);
+    if (!items.length) continue;
+    console.log(`  ║  ── ${cat.toUpperCase()} ─────────────────────────────────────────────`);
+    for (const item of items) {
+      const owned = data.ownedCosmetics.includes(item.id);
+      const price = item.priceUsd ? `$${item.priceUsd.toFixed(2)}` : 'FREE';
+      const status = owned ? '✓ OWNED' : price;
+      console.log(`  ║    ${item.name.padEnd(25)} [${item.rarity.toUpperCase().padEnd(10)}] ${status}`);
+    }
+  }
+
+  console.log(subDivider());
+  console.log(`  ║  Inventory Slots: ${data.inventorySlots}`);
+  console.log(footer());
+  console.log('  Type: purchase <item_id> | equip <item_id> | claim <reward_id>\n');
+}
+
+// ─── Auth Functions ─────────────────────────────────────────────────────────────
+
+async function authLogin(): Promise<{ success: boolean; playerId?: string; username?: string; token?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(SERVER_URL);
+
+    ws.on('open', () => {
+      rl.question('  Username or email: ', (username: string) => {
+        rl.question('  Password: ', async (password: string) => {
+          ws.send(JSON.stringify({ type: 'auth_login', username: username.trim(), password }));
+        });
+      });
+    });
+
+    ws.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString());
+      ws.close();
+
+      if (msg.type === 'auth_success') {
+        resolve({ success: true, playerId: msg.playerId, username: msg.username, token: msg.token });
+      } else {
+        resolve({ success: false, error: msg.text ?? 'Login failed.' });
+      }
+    });
+
+    ws.on('error', () => {
+      resolve({ success: false, error: 'Cannot connect to server.' });
+    });
+  });
+}
+
+async function authRegister(): Promise<{ success: boolean; playerId?: string; username?: string; token?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(SERVER_URL);
+
+    ws.on('open', () => {
+      rl.question('  Choose a username (3-20 chars, letters/numbers/underscore): ', (username: string) => {
+        rl.question('  Email: ', (email: string) => {
+          rl.question('  Password (min 6 chars): ', (password: string) => {
+            ws.send(JSON.stringify({ type: 'auth_register', username: username.trim(), email: email.trim(), password }));
+          });
+        });
+      });
+    });
+
+    ws.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString());
+      ws.close();
+
+      if (msg.type === 'auth_success') {
+        resolve({ success: true, playerId: msg.playerId, username: msg.username, token: msg.token });
+      } else {
+        resolve({ success: false, error: msg.text ?? 'Registration failed.' });
+      }
+    });
+
+    ws.on('error', () => {
+      resolve({ success: false, error: 'Cannot connect to server.' });
+    });
+  });
+}
+
+// ─── Connection ─────────────────────────────────────────────────────────────────
+
+function connectWithAuth(playerId: string, playerName: string, token: string, slot = 1): void {
   const ws = new WebSocket(SERVER_URL);
 
   ws.on('open', () => {
-    console.log(`[Connected] Registering as ${name} (slot ${slot})...`);
-    ws.send(JSON.stringify({ type: 'register', playerId, name, slot }));
+    console.log(`[Connected] Logging in as ${playerName}...`);
+    ws.send(JSON.stringify({ type: 'connect', playerId, name: playerName, token, slot }));
   });
 
   ws.on('message', (data: Buffer) => {
     const msg = JSON.parse(data.toString());
 
     if (msg.type === 'connected' || msg.type === 'loaded') {
-      state = { socket: ws, sessionId: msg.sessionId, playerId, saveSlot: slot, connected: true };
+      state = { socket: ws, sessionId: msg.sessionId, playerId, playerName, token, saveSlot: slot, connected: true };
       console.log('\n' + divider());
       console.log('  ⚔  LAST LINE  —  CLI Adventure Game');
       console.log(divider());
       if (msg.type === 'connected') {
-        console.log('\n  Welcome, ' + name + '! Your journey begins at Ashford Village.');
+        console.log('\n  Welcome, ' + playerName + '! Your journey begins at Ashford Village.');
         console.log('  Starting gear: Wooden Sword, Tattered Cloth, 3× Health Potion I');
         console.log('  Type "help" for commands.\n');
       } else {
-        console.log('\n  Game loaded. Welcome back, ' + name + '.\n');
+        console.log('\n  Game loaded. Welcome back, ' + playerName + '.\n');
       }
       ws.send(JSON.stringify({ type: 'command', cmd: 'look' }));
+      setTimeout(() => prompt(), 100);
+      return;
+    }
+
+    if (msg.type === 'auth_error' || msg.type === 'auth_required') {
+      console.log('\n  ⚠ ' + (msg.text ?? 'Authentication failed.'));
+      ws.close();
+      mainMenu();
       return;
     }
 
@@ -77,10 +196,46 @@ function connect(playerId: string, name: string, slot = 1): void {
       return;
     }
 
+    if (msg.type === 'push') {
+      process.stdout.write('\n' + msg.text + '\n');
+      return;
+    }
+
+    if (msg.type === 'error') {
+      console.log('\n  ⚠ ' + msg.text);
+      return;
+    }
+
     if (msg.type === 'quit') {
       console.log('\n  Goodbye!\n');
       rl.close();
       process.exit(0);
+    }
+
+    // Phase 11: Store handlers
+    if (msg.type === 'store_url') {
+      console.log('\n  Opening cosmetic store in your browser...');
+      return;
+    }
+
+    if (msg.type === 'store_data') {
+      displayStore(msg);
+      return;
+    }
+
+    if (msg.type === 'purchase_success') {
+      console.log('\n  ✓ Purchase successful! Item added to your inventory.');
+      return;
+    }
+
+    if (msg.type === 'cosmetic_equipped') {
+      console.log('\n  ✓ Cosmetic equipped!');
+      return;
+    }
+
+    if (msg.type === 'reward_claimed') {
+      console.log('\n  ✓ Reward claimed! Check your cosmetics.');
+      return;
     }
   });
 
@@ -96,52 +251,142 @@ function connect(playerId: string, name: string, slot = 1): void {
   });
 }
 
-function divider(): string {
-  return '  ╔═══════════════════════════════════════════════════════════════════════╗';
+function connectNewCharacter(playerId: string, playerName: string, token: string): void {
+  connectWithAuth(playerId, playerName, token, 1);
 }
 
-// ─── Boot Sequence ─────────────────────────────────────────────────────────────
+function connectExistingCharacter(playerId: string, playerName: string, token: string): void {
+  connectWithAuth(playerId, playerName, token, 1);
+}
 
-function boot(): void {
+// ─── Boot / Main Menu ───────────────────────────────────────────────────────────
+
+function mainMenu(): void {
   console.log(divider());
   console.log('  ⚔  LAST LINE  —  CLI Adventure Game');
-  console.log('  ╠═══════════════════════════════════════════════════════════════════════╣');
-  console.log('  [1] New Game (create character)');
-  console.log('  [2] Load Game (existing save)');
-  console.log('  ╚═══════════════════════════════════════════════════════════════════════╝');
+  console.log(subDivider());
+  console.log('  [1] Login (existing account)');
+  console.log('  [2] Register (new account)');
+  console.log('  [3] Continue as Guest (quick play)');
+  console.log(footer());
 
   rl.question('> ', (choice: string) => {
-    if (choice.trim() === '1') {
-      createCharacter();
-    } else if (choice.trim() === '2') {
-      loadCharacter();
+    const trimmed = choice.trim();
+    if (trimmed === '1') {
+      doLogin();
+    } else if (trimmed === '2') {
+      doRegister();
+    } else if (trimmed === '3') {
+      doGuest();
+    } else {
+      console.log('Invalid choice. Please enter 1, 2, or 3.');
+      mainMenu();
+    }
+  });
+}
+
+async function doLogin(): Promise<void> {
+  console.log('\n  ═══ LOGIN ═══');
+  const result = await authLogin();
+
+  if (!result.success) {
+    console.log('\n  ⚠ ' + (result.error ?? 'Login failed.'));
+    console.log('  Press Enter to return to menu...');
+    rl.question('', () => mainMenu());
+    return;
+  }
+
+  console.log('\n  ✓ Login successful!');
+  console.log('  Welcome back, ' + result.username + '!');
+
+  // Now show character selection
+  characterSelect(result.playerId!, result.username!, result.token!);
+}
+
+async function doRegister(): Promise<void> {
+  console.log('\n  ═══ CREATE ACCOUNT ═══');
+  const result = await authRegister();
+
+  if (!result.success) {
+    console.log('\n  ⚠ ' + (result.error ?? 'Registration failed.'));
+    console.log('  Press Enter to return to menu...');
+    rl.question('', () => mainMenu());
+    return;
+  }
+
+  console.log('\n  ✓ Account created!');
+  console.log('  Welcome, ' + result.username + '! Your account is ready.');
+
+  // Create character and connect
+  connectNewCharacter(result.playerId!, result.username!, result.token!);
+}
+
+function doGuest(): void {
+  // Guest mode: simple registration without email
+  const guestId = 'guest_' + Date.now();
+  const guestName = 'Guest' + Math.floor(Math.random() * 9999);
+
+  const ws = new WebSocket(SERVER_URL);
+
+  ws.on('open', () => {
+    ws.send(JSON.stringify({ type: 'auth_register', username: guestName, email: guestId + '@guest.local', password: 'guest_' + guestId }));
+  });
+
+  ws.on('message', (data: Buffer) => {
+    const msg = JSON.parse(data.toString());
+
+    if (msg.type === 'auth_success') {
+      ws.close();
+      console.log('\n  ✓ Guest account created!');
+      connectWithAuth(msg.playerId, guestName, msg.token, 1);
+    } else if (msg.type === 'auth_error') {
+      console.log('\n  ⚠ ' + (msg.text ?? 'Guest mode unavailable.'));
+      ws.close();
+      mainMenu();
+    }
+  });
+
+  ws.on('error', () => {
+    console.log('\n  ⚠ Cannot connect to server.');
+    mainMenu();
+  });
+}
+
+function characterSelect(playerId: string, playerName: string, token: string): void {
+  console.log(divider());
+  console.log('  ⚔  CHARACTER SELECT');
+  console.log(subDivider());
+  console.log(`  Logged in as: ${playerName}`);
+  console.log('  [1] New Game (create character)');
+  console.log('  [2] Load Game (existing save)');
+  console.log('  [3] Back to main menu');
+  console.log(footer());
+
+  rl.question('> ', (choice: string) => {
+    const trimmed = choice.trim();
+    if (trimmed === '1') {
+      rl.question('  Enter your character name: ', (name: string) => {
+        if (!name.trim() || name.length < 2 || name.length > 20) {
+          console.log('  Name must be 2–20 characters.');
+          characterSelect(playerId, playerName, token);
+          return;
+        }
+        connectNewCharacter(playerId, name.trim(), token);
+      });
+    } else if (trimmed === '2') {
+      rl.question('  Enter your character name: ', (name: string) => {
+        if (!name.trim()) { characterSelect(playerId, playerName, token); return; }
+        connectExistingCharacter(playerId, name.trim(), token);
+      });
+    } else if (trimmed === '3') {
+      mainMenu();
     } else {
       console.log('Invalid choice.');
-      boot();
+      characterSelect(playerId, playerName, token);
     }
   });
 }
 
-function createCharacter(): void {
-  rl.question('  Enter your character name: ', (name: string) => {
-    if (!name.trim() || name.length < 2 || name.length > 20) {
-      console.log('  Name must be 2–20 characters.');
-      createCharacter();
-      return;
-    }
-    const playerId = 'player_' + name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
-    connect(playerId, name.trim(), 1);
-    setTimeout(() => prompt(), 100);
-  });
-}
+// ─── Boot ───────────────────────────────────────────────────────────────────────
 
-function loadCharacter(): void {
-  rl.question('  Enter your character name: ', (name: string) => {
-    if (!name.trim()) { loadCharacter(); return; }
-    const playerId = 'player_' + name.toLowerCase().replace(/\s+/g, '_');
-    connect(playerId, name.trim(), 1);
-    setTimeout(() => prompt(), 100);
-  });
-}
-
-boot();
+mainMenu();

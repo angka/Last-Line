@@ -237,8 +237,14 @@ app.delete('/api/admin/admins/:id', adminAuth, async (req, res) => {
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 app.get('/api/admin/audit', adminAuth, async (req, res) => {
-  const limit = Math.min(parseInt((req.query['limit'] as string) ?? '100'), 500);
-  const offset = parseInt((req.query['offset'] as string) ?? '0');
+  const rawLimit = parseInt((req.query['limit'] as string) ?? '100', 10);
+  const rawOffset = parseInt((req.query['offset'] as string) ?? '0', 10);
+  if (isNaN(rawLimit) || isNaN(rawOffset)) {
+    res.status(400).json({ error: 'limit and offset must be valid integers' });
+    return;
+  }
+  const limit = Math.min(Math.max(1, rawLimit), 500);
+  const offset = Math.max(0, rawOffset);
   const logs = await getAuditLog(limit, offset);
   res.json({ logs, limit, offset });
 });
@@ -522,8 +528,24 @@ app.post('/admin/content/save', adminAuth, (req, res) => {
   const filename = CATALOG_MAP[catalog];
   if (!filename) { res.status(400).json({ error: 'Unknown catalog' }); return; }
   const filePath = path.join(CONTENT_DIR, filename);
+
+  // Security: verify the resolved path stays within CONTENT_DIR
+  if (!path.resolve(filePath).startsWith(path.resolve(CONTENT_DIR))) {
+    res.status(403).json({ error: 'Forbidden: path traversal detected' });
+    return;
+  }
+
   try {
-    JSON.parse(json); // validate
+    // Validate that json is a string and parseable
+    if (typeof json !== 'string') {
+      res.status(400).json({ error: 'json must be a string' });
+      return;
+    }
+    const parsed = JSON.parse(json); // validate
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      res.status(400).json({ error: 'json must be a JSON object' });
+      return;
+    }
     fs.writeFileSync(filePath, json, 'utf-8');
     const result = manualReload();
     adminAudit(admin, 'SAVE_CONTENT', 'server', catalog, { catalog, filename }, extractIp(req));

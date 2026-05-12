@@ -67,14 +67,28 @@ wss.on('connection', async (socket, _req) => {
   const sessionId = uuid();
 
   socket.on('message', async (data: Buffer) => {
-    const msg = JSON.parse(data.toString());
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(data.toString()) as Record<string, unknown>;
+    } catch {
+      socket.send(JSON.stringify({ type: 'error', text: 'Invalid message format.' }));
+      return;
+    }
+
+    // Basic message type validation - reject messages without a type
+    if (typeof msg.type !== 'string') {
+      socket.send(JSON.stringify({ type: 'error', text: 'Missing message type.' }));
+      return;
+    }
+
     const session = sessions.get(sessionId);
 
     // ── Player Auth: Login ──────────────────────────────────────────────────
     if (msg.type === 'auth_login') {
-      const { username, password } = msg;
+      const username = String(msg.username ?? '');
+      const password = String(msg.password ?? '');
       const { loginPlayer } = await import('./auth/PlayerAuthService');
-      const result = await loginPlayer(username ?? '', password ?? '');
+      const result = await loginPlayer(username, password);
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'auth_error', text: result.error ?? 'Login failed.' }));
         return;
@@ -90,9 +104,11 @@ wss.on('connection', async (socket, _req) => {
 
     // ── Player Auth: Register ───────────────────────────────────────────────
     if (msg.type === 'auth_register') {
-      const { username, email, password } = msg;
+      const username = String(msg.username ?? '');
+      const email = String(msg.email ?? '');
+      const password = String(msg.password ?? '');
       const { registerPlayer } = await import('./auth/PlayerAuthService');
-      const result = await registerPlayer(username ?? '', email ?? '', password ?? '');
+      const result = await registerPlayer(username, email, password);
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'auth_error', text: result.error ?? 'Registration failed.' }));
         return;
@@ -108,7 +124,7 @@ wss.on('connection', async (socket, _req) => {
 
     // ── Player Auth: Logout ─────────────────────────────────────────────────
     if (msg.type === 'logout') {
-      const { token } = msg;
+      const token = String(msg.token ?? '');
       if (token) {
         const { logoutPlayer } = await import('./auth/PlayerAuthService');
         await logoutPlayer(token).catch(() => {});
@@ -120,7 +136,7 @@ wss.on('connection', async (socket, _req) => {
     // ── Steam Auth (Phase 11) ───────────────────────────────────────────────
     if (msg.type === 'steam_auth') {
       const { steamAuth } = await import('./auth/PlayerAuthService');
-      const result = await steamAuth(msg.ticket ?? '');
+      const result = await steamAuth(String(msg.ticket ?? ''));
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'steam_error', text: result.error ?? 'Steam auth failed.' }));
         return;
@@ -143,7 +159,7 @@ wss.on('connection', async (socket, _req) => {
     let validatedUsername: string | null = null;
     if (msg.token) {
       const { validateToken } = await import('./auth/PlayerAuthService');
-      const auth = await validateToken(msg.token);
+      const auth = await validateToken(String(msg.token));
       if (auth) {
         validatedPlayerId = auth.playerId;
         validatedUsername = auth.username;
@@ -157,7 +173,7 @@ wss.on('connection', async (socket, _req) => {
         return;
       }
       const { linkSteamAccount } = await import('./auth/PlayerAuthService');
-      const result = await linkSteamAccount(validatedPlayerId, msg.ticket ?? '');
+      const result = await linkSteamAccount(validatedPlayerId, String(msg.ticket ?? ''));
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'error', text: result.error ?? 'Link failed.' }));
         return;
@@ -200,13 +216,14 @@ wss.on('connection', async (socket, _req) => {
         socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
         return;
       }
+      const cosmeticId = String(msg.cosmeticId ?? '');
       const { purchaseCosmetic } = await import('./store/CosmeticStore');
-      const result = await purchaseCosmetic(session.playerId, msg.cosmeticId ?? '');
+      const result = await purchaseCosmetic(session.playerId, cosmeticId);
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'purchase_error', text: result.error }));
         return;
       }
-      socket.send(JSON.stringify({ type: 'purchase_success', cosmeticId: msg.cosmeticId }));
+      socket.send(JSON.stringify({ type: 'purchase_success', cosmeticId }));
       return;
     }
 
@@ -216,13 +233,14 @@ wss.on('connection', async (socket, _req) => {
         socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
         return;
       }
+      const cosmeticId = String(msg.cosmeticId ?? '');
       const { equipCosmetic } = await import('./store/CosmeticStore');
-      const result = await equipCosmetic(session.playerId, msg.cosmeticId ?? '');
+      const result = await equipCosmetic(session.playerId, cosmeticId);
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'error', text: result.error }));
         return;
       }
-      socket.send(JSON.stringify({ type: 'cosmetic_equipped', cosmeticId: msg.cosmeticId }));
+      socket.send(JSON.stringify({ type: 'cosmetic_equipped', cosmeticId }));
       return;
     }
 
@@ -232,13 +250,14 @@ wss.on('connection', async (socket, _req) => {
         socket.send(JSON.stringify({ type: 'error', text: 'No active session.' }));
         return;
       }
+      const rewardId = String(msg.rewardId ?? '');
       const { claimPlayerReward } = await import('./store/CosmeticStore');
-      const result = await claimPlayerReward(session.playerId, msg.rewardId ?? '');
+      const result = await claimPlayerReward(session.playerId, rewardId);
       if (!result.success) {
         socket.send(JSON.stringify({ type: 'error', text: result.error }));
         return;
       }
-      socket.send(JSON.stringify({ type: 'reward_claimed', rewardId: msg.rewardId, cosmeticId: result.cosmeticId }));
+      socket.send(JSON.stringify({ type: 'reward_claimed', rewardId, cosmeticId: result.cosmeticId }));
       return;
     }
 
@@ -265,7 +284,7 @@ wss.on('connection', async (socket, _req) => {
 
     // ── Registration (after auth) ─────────────────────────────────────────
     if (msg.type === 'register') {
-      const pid = validatedPlayerId ?? msg.playerId;
+      const pid = validatedPlayerId ?? String(msg.playerId ?? '');
       if (!pid) {
         socket.send(JSON.stringify({ type: 'auth_required', text: 'Please login or register first.' }));
         return;
@@ -282,13 +301,13 @@ wss.on('connection', async (socket, _req) => {
         return;
       }
 
-      const name = validatedUsername ?? msg.name ?? 'Unknown';
+      const name = validatedUsername ?? String(msg.name ?? 'Unknown');
       let newSave = createDefaultSave(name);
       newSave.playerId = pid;
       newSave.playerName = name;
 
       // Only add starter items on first connect (new character)
-      const slot = msg.slot ?? 1;
+      const slot = Number(msg.slot ?? 1);
       const existingSave = await loadSave(pid, slot);
       if (!existingSave) {
         newSave = inventoryAdd(newSave, 'wooden_sword', 1).save;
@@ -330,7 +349,7 @@ wss.on('connection', async (socket, _req) => {
 
     // ── Load ─────────────────────────────────────────────────────────────
     if (msg.type === 'load') {
-      const pid = validatedPlayerId ?? msg.playerId;
+      const pid = validatedPlayerId ?? String(msg.playerId ?? '');
       if (!pid) {
         socket.send(JSON.stringify({ type: 'auth_required', text: 'Please login or register first.' }));
         return;
@@ -347,7 +366,7 @@ wss.on('connection', async (socket, _req) => {
         return;
       }
 
-      const slot = msg.slot ?? 1;
+      const slot = Number(msg.slot ?? 1);
       const save = await loadSave(pid, slot);
       if (!save) {
         socket.send(JSON.stringify({ type: 'error', text: 'No save found in that slot.' }));
@@ -383,8 +402,13 @@ wss.on('connection', async (socket, _req) => {
     // ── Chat-only message (can be sent without full session) ─────────────
     if (msg.type === 'chat') {
       if (!session) return;
-      const { channel, text, to } = msg;
-      const playerName = session.currentState.stats.name;
+      // Sanitize all user input to prevent injection attacks
+      const channel = String(msg.channel ?? '').replace(/[^\w]/g, '').substring(0, 20);
+      const text = String(msg.text ?? '').replace(/[\x00-\x1F\x7F]/g, '').substring(0, 300);
+      const to = String(msg.to ?? '').replace(/[^\w]/g, '').substring(0, 50);
+      const playerName = String(session.currentState.stats.name ?? 'Unknown').substring(0, 30);
+
+      if (!text) return; // Silently ignore empty messages
 
       switch (channel) {
         case 'area': {
@@ -430,13 +454,15 @@ wss.on('connection', async (socket, _req) => {
     // ── Command ──────────────────────────────────────────────────────────
     if (msg.type === 'command') {
       session.lastActivity = new Date();
+      // Sanitize command input
+      const cmd = String(msg.cmd ?? '').replace(/[\x00-\x1F\x7F]/g, '').substring(0, 500);
 
       // Check if player is in party combat — delegate if so
       const partyCombat = getPartyCombat(session.currentState.partyId ?? '');
       if (partyCombat) {
         // Handle party combat commands
-        if (msg.cmd.startsWith('attack ') || msg.cmd === 'attack') {
-          const targetIdx = parseInt(msg.cmd.split(' ')[1] ?? '1') - 1;
+        if (cmd.startsWith('attack ') || cmd === 'attack') {
+          const targetIdx = parseInt(cmd.split(' ')[1] ?? '1', 10) - 1;
           const result = executePartyAction(session.playerId, 'attack', { targetIdx });
           if (!result) {
             socket.send(JSON.stringify({ type: 'output', text: 'Party combat error.' }));
@@ -447,31 +473,31 @@ wss.on('connection', async (socket, _req) => {
           socket.send(JSON.stringify({ type: 'output', text: result.text }));
           return;
         }
-        if (msg.cmd.startsWith('flee')) {
+        if (cmd.startsWith('flee')) {
           const result = executePartyAction(session.playerId, 'flee');
           socket.send(JSON.stringify({ type: 'output', text: result?.text ?? 'Cannot flee.' }));
           return;
         }
-        if (msg.cmd.startsWith('heal ')) {
-          const targetName = msg.cmd.split(' ').slice(1).join(' ');
+        if (cmd.startsWith('heal ')) {
+          const targetName = cmd.split(' ').slice(1).join(' ').replace(/[^\w\s]/g, '').substring(0, 50);
           const targetSession = presenceManager.getSessionByPlayerName(targetName);
           const result = executePartyAction(session.playerId, 'heal', { targetPlayerId: targetSession?.playerId });
           socket.send(JSON.stringify({ type: 'output', text: result?.text ?? 'Cannot heal.' }));
           return;
         }
-        if (msg.cmd.startsWith('buff ')) {
-          const targetName = msg.cmd.split(' ').slice(1).join(' ');
+        if (cmd.startsWith('buff ')) {
+          const targetName = cmd.split(' ').slice(1).join(' ').replace(/[^\w\s]/g, '').substring(0, 50);
           const targetSession = presenceManager.getSessionByPlayerName(targetName);
           const result = executePartyAction(session.playerId, 'buff', { targetPlayerId: targetSession?.playerId });
           socket.send(JSON.stringify({ type: 'output', text: result?.text ?? 'Cannot buff.' }));
           return;
         }
-        if (msg.cmd.startsWith('skill ') || msg.cmd.startsWith('magic ')) {
+        if (cmd.startsWith('skill ') || cmd.startsWith('magic ')) {
           // skill physical/magic/support <n> [target]
-          const parts = msg.cmd.split(' ');
+          const parts = cmd.split(' ');
           const skillType = parts[1] === 'magic' ? 'magic' : parts[1] === 'support' ? 'support' : 'physical';
-          const skillIdx = parseInt(parts[2] ?? '1') - 1;
-          const targetName = parts[3];
+          const skillIdx = parseInt(parts[2] ?? '1', 10) - 1;
+          const targetName = (parts[3] ?? '').replace(/[^\w]/g, '').substring(0, 50);
           const targetSession = targetName ? presenceManager.getSessionByPlayerName(targetName) : null;
           if (skillType === 'support' && targetSession) {
             const result = executePartyAction(session.playerId, 'support', {
@@ -481,7 +507,7 @@ wss.on('connection', async (socket, _req) => {
             });
             socket.send(JSON.stringify({ type: 'output', text: result?.text ?? 'Cannot use support skill.' }));
           } else {
-            const targetIdx = targetName ? parseInt(targetName) - 1 : 0;
+            const targetIdx = targetName ? parseInt(targetName, 10) - 1 : 0;
             const result = executePartyAction(session.playerId, skillType as any, {
               skillType: skillType as any,
               skillIdx,
@@ -491,14 +517,14 @@ wss.on('connection', async (socket, _req) => {
           }
           return;
         }
-        if (msg.cmd === 'log') {
+        if (cmd === 'log') {
           const pc = getPartyCombat(session.currentState.partyId ?? '');
           socket.send(JSON.stringify({ type: 'output', text: formatPartyCombatStateDisplay(pc ?? partyCombat, session.playerId) }));
           return;
         }
         // Allow non-combat commands through during party combat
-        if (!isCombatCommand(msg.cmd)) {
-          const result = await parseCommand(msg.cmd, session.currentState, undefined, session.sessionId, session.playerId);
+        if (!isCombatCommand(cmd)) {
+          const result = await parseCommand(cmd, session.currentState, undefined, session.sessionId, session.playerId);
           session.currentState = result.newSave ?? session.currentState;
           if (result.action === 'save') await saveSave(session.playerId, session.saveSlot, session.currentState, 0);
           socket.send(JSON.stringify({ type: 'output', text: result.text }));
@@ -511,8 +537,6 @@ wss.on('connection', async (socket, _req) => {
       // ── Phase 7: PvP Combat ─────────────────────────────────────────────
       const pvpSession = pvpManager.getSessionForPlayer(session.playerId);
       if (pvpSession) {
-        const cmd = msg.cmd.trim().toLowerCase();
-
         // PvP attack
         if (cmd === 'attack' || cmd.startsWith('attack ')) {
           const result = pvpManager.pvpAttack(pvpSession.sessionId, session.playerId);
@@ -583,7 +607,7 @@ wss.on('connection', async (socket, _req) => {
       }
 
       // ── Check PvP initiation: attack <playername> ───────────────────────
-      const attackParts = msg.cmd.trim().split(/\s+/);
+      const attackParts = cmd.trim().split(/\s+/);
       if ((attackParts[0] === 'attack' || attackParts[0] === 'a') && attackParts.length >= 2) {
         const targetName = attackParts.slice(1).join(' ');
         const targetEntry = presenceManager.getSessionByPlayerName(targetName);
@@ -621,7 +645,7 @@ wss.on('connection', async (socket, _req) => {
       }
 
       // ── Phase 8: World Boss Combat ───────────────────────────────────────
-      const cmdLower = msg.cmd.trim().toLowerCase();
+      const cmdLower = cmd.trim().toLowerCase();
       if (cmdLower === 'worldboss attack' || cmdLower.startsWith('worldboss attack ')) {
         const attackResult = worldBossCombatEngine.playerAttack(session.playerId, session.currentState);
         if (!attackResult) {
@@ -642,7 +666,7 @@ wss.on('connection', async (socket, _req) => {
         return;
       }
 
-      const result = await parseCommand(msg.cmd, session.currentState, session.combatState, session.sessionId, session.playerId);
+      const result = await parseCommand(cmd, session.currentState, session.combatState, session.sessionId, session.playerId);
 
       const newSave = result.newSave ?? session.currentState;
       session.currentState = newSave;

@@ -20,11 +20,18 @@ const PLAYER_DB_PATH = path.join(PLAYER_DB_DIR, 'player.db');
 
 // ─── JWT Helpers ────────────────────────────────────────────────────────────────
 
-const PLAYER_JWT_SECRET = process.env.PLAYER_JWT_SECRET ?? 'lastline-player-dev-secret-change-in-production';
+const PLAYER_JWT_SECRET: string = process.env.PLAYER_JWT_SECRET ?? '';
+if (!PLAYER_JWT_SECRET) {
+  throw new Error('FATAL: PLAYER_JWT_SECRET environment variable is not set. Set it to a secure random string in production.');
+}
 const PLAYER_JWT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function issuePlayerJwt(playerId: string): string {
-  const payload = { playerId, iat: Math.floor(Date.now() / 1000) };
+  const payload = {
+    playerId,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + (PLAYER_JWT_EXPIRY_MS / 1000),
+  };
   const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', PLAYER_JWT_SECRET).update(encoded).digest('base64url');
   return `${encoded}.${sig}`;
@@ -33,10 +40,15 @@ export function issuePlayerJwt(playerId: string): string {
 export function verifyPlayerJwt(token: string): { playerId: string } | null {
   try {
     const [encoded, sig] = token.split('.');
+    if (!encoded || !sig) return null;
     const expected = crypto.createHmac('sha256', PLAYER_JWT_SECRET).update(encoded).digest('base64url');
     if (sig !== expected) return null;
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString());
-    return payload;
+    // Check expiration
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return { playerId: payload.playerId };
   } catch {
     return null;
   }

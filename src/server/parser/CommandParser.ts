@@ -1,15 +1,17 @@
 import type { SaveFile, CommandResult, RegenState, EquipSlot, LootDrop } from '../../types';
-import { AREAS, describeArea, getArea, CITIES, getCityById, isDungeonArea } from '../../data/areas';
+import {
+  getArea, describeArea, getAllCities, getCityById, isDungeonArea,
+  getItem, rarityColor, rarityName, RARITY_RESET,
+  getShopCatalog,
+  getSkillByItemId, getScrollDropsForTier, getSkillManaCost,
+  getDungeonForArea, getDungeonFloor, getNextFloorArea2, getPrevFloorArea2, isInfiniteFloor, getInfiniteFloorInfo, describeInfiniteFloor,
+  getAreaNodes,
+} from '../content/ContentManager';
 import { inventoryAdd, inventoryRemove, inventoryEquip, inventoryUse, formatInventoryPage, inventoryUnequip } from '../items/InventoryManager';
-import { getItem, rarityColor, rarityName, RARITY_RESET } from '../../data/items';
 import { regenStateLabel } from '../engine/RegenEngine';
 import { generateEncounter, createCombatSession, playerAttack, playerFlee, enemyTurn, checkVictory, advanceTurn, formatCombatState, formatCombatPrompt, resolveVictory, resolveDefeat, tickStatusEffects, playerSkill } from '../engine/CombatEngine';
-import { getShopCatalog } from '../../data/shops';
-import { PHYSICAL_SKILLS, MAGIC_SKILLS, SUPPORT_SKILLS, getSkillByItemId, PHYSICAL_SCROLL_DROPS, MAGIC_SCROLL_DROPS, SUPPORT_SCROLL_DROPS, getSkillManaCost } from '../../data/skills';
-import { CRAFTING_RECIPES, GATHERING_NODES } from '../../data/crafting';
 import { formatCraftingMenu, listCraftableItems, craftItem, gatherFromNode, formatAreaNodes } from '../engine/CraftingManager';
 import { getDungeonChestLoot, formatLootDrops } from '../engine/LootEngine';
-import { getDungeonForArea, getDungeonFloor, getNextFloorArea, getPrevFloorArea, getNextFloorArea2, getPrevFloorArea2, isInfiniteFloor, getInfiniteFloorInfo, describeInfiniteFloor } from '../../data/dungeons';
 import { generateBossEncounter } from '../engine/CombatEngine';
 import { presenceManager } from '../social/PresenceManager';
 import { partyManager } from '../social/PartyManager';
@@ -122,7 +124,7 @@ export async function parseCommand(cmd: string, save: SaveFile, combatState?: an
     case 'move': {
       const dir = args[0]?.toLowerCase();
       if (!dir) return { text: 'Go where? Usage: go <north|south|east|west>' };
-      return handleMove(dir, save);
+      return await handleMove(dir, save);
     }
 
     case 'stats': {
@@ -402,7 +404,7 @@ export async function parseCommand(cmd: string, save: SaveFile, combatState?: an
 
 // ─── Movement ──────────────────────────────────────────────────────────
 
-function handleMove(dir: string, save: SaveFile): ParseResult {
+async function handleMove(dir: string, save: SaveFile): Promise<ParseResult> {
   const area = getArea(save.worldState.currentArea);
   if (!area) return { text: 'Unknown area.' };
 
@@ -635,7 +637,7 @@ function handleCombatItem(args: string[], save: SaveFile, combatState: any): Par
 
 function handleTravel(cityName: string | undefined, save: SaveFile): ParseResult {
   if (!cityName) {
-    const unlocked = CITIES.filter(c => save.worldState.unlockedCities.includes(c.id));
+    const unlocked = getAllCities().filter(c => save.worldState.unlockedCities.includes(c.id));
     if (unlocked.length === 0) {
       return { text: 'No cities unlocked yet. Explore to discover new cities.' };
     }
@@ -649,7 +651,7 @@ function handleTravel(cityName: string | undefined, save: SaveFile): ParseResult
     return { text: lines.join('\n') };
   }
 
-  const target = CITIES.find(c =>
+  const target = getAllCities().find(c =>
     c.name.toLowerCase() === cityName.toLowerCase() ||
     c.id === cityName.toLowerCase()
   );
@@ -1497,7 +1499,7 @@ function formatSkills(save: SaveFile): string {
 // ─── Updated look with gathering nodes ─────────────────────────────────────
 
 function formatAreaNodesDisplay(areaId: string): string {
-  const nodes = GATHERING_NODES[areaId] ?? [];
+  const nodes = getAreaNodes(areaId);
   if (nodes.length === 0) return '';
   const lines: string[] = ['  Resource Nodes:'];
   for (const node of nodes) {

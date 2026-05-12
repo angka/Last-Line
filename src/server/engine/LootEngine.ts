@@ -1,6 +1,5 @@
 import type { SaveFile, LootDrop, BossDropTable, LootEntry } from '../../types';
-import { ITEMS, getItem } from '../../data/items';
-import { PHYSICAL_SCROLL_DROPS, MAGIC_SCROLL_DROPS, SUPPORT_SCROLL_DROPS, getScrollDropsForTier } from '../../data/skills';
+import { getItem, getScrollDropsForTier } from '../content/ContentManager';
 
 // ─── Dungeon Tier by Dungeon ID ────────────────────────────────────────────────
 

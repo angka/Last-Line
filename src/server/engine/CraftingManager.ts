@@ -1,6 +1,6 @@
 import type { SaveFile, CraftingRecipe, LootDrop } from '../../types';
-import { CRAFTING_RECIPES, getToolRequirementLabel, canCraftRecipe, countMaterialsInInventory, GATHERING_NODES } from '../../data/crafting';
-import { getItem } from '../../data/items';
+import { getAllRecipes, getToolRequirementLabel, canCraftRecipe, countMaterialsInInventory, getGatheringNodesForArea } from '../content/ContentManager';
+import { getItem } from '../content/ContentManager';
 import { inventoryAdd, inventoryRemove } from '../items/InventoryManager';
 
 // ─── Crafting Interface ───────────────────────────────────────────────────────
@@ -20,7 +20,8 @@ export interface CraftResult {
 // ─── List craftable items ─────────────────────────────────────────────────────
 
 export function listCraftableItems(save: SaveFile): CraftableItem[] {
-  return CRAFTING_RECIPES.map((recipe, idx) => ({
+  const recipes = getAllRecipes();
+  return Object.values(recipes).map((recipe, idx) => ({
     index: idx,
     recipe,
     hasMaterials: canCraftRecipe(recipe, save.inventory),
@@ -30,11 +31,13 @@ export function listCraftableItems(save: SaveFile): CraftableItem[] {
 // ─── Craft an item ────────────────────────────────────────────────────────────
 
 export function craftItem(save: SaveFile, recipeIndex: number): CraftResult {
-  if (recipeIndex < 0 || recipeIndex >= CRAFTING_RECIPES.length) {
+  const recipes = getAllRecipes();
+  const recipeList = Object.values(recipes);
+  if (recipeIndex < 0 || recipeIndex >= recipeList.length) {
     return { text: 'Invalid recipe number. Type "craft" to see available recipes.' };
   }
 
-  const recipe = CRAFTING_RECIPES[recipeIndex];
+  const recipe = recipeList[recipeIndex];
 
   if (save.stats.level < recipe.skillLevelRequired) {
     return { text: `You need to be level ${recipe.skillLevelRequired} to craft ${recipe.name}.` };
@@ -142,7 +145,7 @@ export function gatherFromNode(
   areaId: string,
   verb: 'gather' | 'mine' | 'chop' | 'pick' | 'fill' | 'sift' | 'attune',
 ): GatherResult {
-  const nodes = GATHERING_NODES[areaId] ?? [];
+  const nodes = getGatheringNodesForArea(areaId);
   const node = nodes.find(n => n.verb === verb);
 
   if (!node) {
@@ -231,7 +234,7 @@ export function gatherFromNode(
 // ─── Format area nodes for 'look' display ────────────────────────────────────
 
 export function formatAreaNodes(areaId: string): string {
-  const nodes = GATHERING_NODES[areaId] ?? [];
+  const nodes = getGatheringNodesForArea(areaId);
   if (nodes.length === 0) return '';
 
   const lines: string[] = ['  Resource Nodes:'];

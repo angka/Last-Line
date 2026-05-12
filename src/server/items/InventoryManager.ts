@@ -1,5 +1,5 @@
 import type { InventorySlot, Item, SaveFile, EquipSlot } from '../../types';
-import { ITEMS, getItem, rarityColor, RARITY_RESET } from '../../data/items';
+import { getItem, rarityColor, RARITY_RESET } from '../content/ContentManager';
 import { v4 as uuid } from 'uuid';
 
 const MAX_INVENTORY = 30;

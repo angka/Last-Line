@@ -1,9 +1,9 @@
 import type { SaveFile, CombatSession, CombatParticipant, CombatLogEntry, Enemy, StatusEffect, LootDrop, PhysicalSkill, MagicSkill, SupportSkill } from '../../types';
-import { getEnemy, scaleEnemy, ENEMIES } from '../../data/enemies';
-import { ITEMS, getItem } from '../../data/items';
-import { PHYSICAL_SKILLS, MAGIC_SKILLS, SUPPORT_SKILLS, getSkillLevelMultiplier, getSkillManaCost } from '../../data/skills';
-import { getDungeonForArea } from '../../data/dungeons';
-import { computeAttack, levelUp, calcExpToNext } from './PlayerEngine';
+import { getEnemy, scaleEnemy, getAllEnemies } from '../content/ContentManager';
+import { getItem } from '../content/ContentManager';
+import { getSkill, getSkillLevelMultiplier, getSkillManaCost } from '../content/ContentManager';
+import { getDungeonForArea } from '../content/ContentManager';
+import { computeAttack, levelUp } from './PlayerEngine';
 import { rollBossLoot, rollScrollDrops, rollRegularLoot, getDungeonTier, formatLootDrops, addLootToPending } from './LootEngine';
 import { getExpMultiplier, getGoldMultiplier } from '../content/EventEngine';
 import { v4 as uuid } from 'uuid';
@@ -11,8 +11,8 @@ import { v4 as uuid } from 'uuid';
 // ─── Encounter Generation ───────────────────────────────────────────────────
 
 export function generateBossEncounter(bossId: string): Enemy | null {
-  const boss = ENEMIES[bossId];
-  if (!boss || !boss.isBoss) return null;
+  const boss = getEnemy(bossId);
+  if (!boss || !(boss as any).isBoss) return null;
   return boss;
 }
 
@@ -23,8 +23,9 @@ export function generateEncounter(
   groupSizeMax = 2,
   eliteChance = 0.08,
 ): Enemy[] {
-  const pool = Object.values(ENEMIES).filter(
-    e => !e.isBoss && e.level >= areaLevelRange[0] && e.level <= areaLevelRange[1],
+  const enemies = getAllEnemies();
+  const pool = Object.values(enemies).filter(
+    e => !(e as any).isBoss && e.level >= areaLevelRange[0] && e.level <= areaLevelRange[1],
   );
   if (pool.length === 0) return [];
 
@@ -397,7 +398,7 @@ export function playerSkill(
     return { session, newSave: save, text: 'Not your turn.' };
   }
 
-  let skill: PhysicalSkill | MagicSkill | SupportSkill;
+  let skill: any;
   if (type === 'physical') {
     skill = save.skills.physical[skillIndex];
   } else if (type === 'magic') {

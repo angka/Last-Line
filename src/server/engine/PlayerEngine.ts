@@ -1,5 +1,5 @@
 import type { PlayerStats, SaveFile } from '../../types';
-import { getDefaultEquipment } from '../../data/items';
+import { getDefaultEquipment } from '../content/ContentManager';
 import { v4 as uuid } from 'uuid';
 
 // ─── Stat Helpers ──────────────────────────────────────────────────────────────

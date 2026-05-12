@@ -76,5 +76,44 @@
     { "id": "flame_blade_craft", "name": "Flame Blade", "outputItemId": "flame_blade", "outputQty": 1, "skillLevelRequired": 7, "materials": [{ "itemId": "magma_ore", "qty": 5 }, { "itemId": "phoenix_bloom", "qty": 3 }, { "itemId": "ember_shard", "qty": 4 }, { "itemId": "steel_ingot", "qty": 3 }], "description": "Forge the Flame Blade." },
     { "id": "void_dagger_craft", "name": "Void Dagger", "outputItemId": "void_dagger", "outputQty": 1, "skillLevelRequired": 8, "materials": [{ "itemId": "void_core_shard", "qty": 2 }, { "itemId": "void_essence", "qty": 4 }, { "itemId": "dark_crystal", "qty": 5 }, { "itemId": "steel_ingot", "qty": 3 }], "description": "Forge the Void Dagger." },
     { "id": "storm_staff_craft", "name": "Storm Staff", "outputItemId": "storm_staff", "outputQty": 1, "skillLevelRequired": 7, "materials": [{ "itemId": "stormcore_ore_raw", "qty": 4 }, { "itemId": "stormstone", "qty": 6 }, { "itemId": "ancient_bark", "qty": 5 }, { "itemId": "mana_crystal_pure", "qty": 3 }], "description": "Craft the Storm Staff." }
-  ]
+  ],
+  "gatheringNodes": {
+    "whispering_plains": [
+      { "nodeId": "wp_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Wild Herb Patch", "position": "by the tall grass", "maxUses": 3, "respawnMinutes": 30, "lootTable": [{ "itemId": "red_herb", "chance": 0.80, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "blue_herb", "chance": 0.25, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "wild_mushroom", "chance": 0.20, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 1 },
+      { "nodeId": "wp_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Iron Seam", "position": "in the rocky outcrop", "maxUses": 2, "respawnMinutes": 60, "lootTable": [{ "itemId": "iron_ore", "chance": 0.85, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "coal", "chance": 0.30, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": "pickaxe", "minPlayerLevel": 1 }
+    ],
+    "goblin_ravine_road": [
+      { "nodeId": "gr_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Ravine Iron Vein", "position": "among the rocks", "maxUses": 3, "respawnMinutes": 60, "lootTable": [{ "itemId": "iron_ore", "chance": 0.80, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "copper_ore", "chance": 0.35, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "coal", "chance": 0.20, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": "pickaxe", "minPlayerLevel": 3 },
+      { "nodeId": "gr_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Ravine Herb Cluster", "position": "near the ravine edge", "maxUses": 2, "respawnMinutes": 30, "lootTable": [{ "itemId": "red_herb", "chance": 0.70, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "wild_mushroom", "chance": 0.30, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 3 }
+    ],
+    "thornwood_edge": [
+      { "nodeId": "te_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Sylvan Herb Patch", "position": "in the dense undergrowth", "maxUses": 3, "respawnMinutes": 30, "lootTable": [{ "itemId": "sylvan_herb", "chance": 0.60, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "moon_blossom", "chance": 0.30, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "blue_herb", "chance": 0.25, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 5 },
+      { "nodeId": "te_wood_01", "nodeType": "lumber_spot", "verb": "chop", "name": "Ancient Bark Log", "position": "near a fallen ancient tree", "maxUses": 2, "respawnMinutes": 45, "lootTable": [{ "itemId": "ancient_bark", "chance": 0.70, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "pine_sap", "chance": 0.40, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": "wood_axe", "minPlayerLevel": 5 }
+    ],
+    "coal_hollow_mines": [
+      { "nodeId": "ch_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Coal Vein", "position": "deep in the tunnel", "maxUses": 4, "respawnMinutes": 60, "lootTable": [{ "itemId": "coal", "chance": 0.80, "qtyMin": 2, "qtyMax": 5 }, { "itemId": "iron_ore", "chance": 0.50, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "copper_ore", "chance": 0.35, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "cave_mushroom", "chance": 0.20, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": "pickaxe", "minPlayerLevel": 6 },
+      { "nodeId": "ch_fungus_01", "nodeType": "fungal_cluster", "verb": "pick", "name": "Cave Fungal Cluster", "position": "on the damp cave wall", "maxUses": 3, "respawnMinutes": 30, "lootTable": [{ "itemId": "cave_mushroom", "chance": 0.80, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "poison_mushroom", "chance": 0.20, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 6 }
+    ],
+    "river_delta_marshland": [
+      { "nodeId": "rd_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Marsh Herb Cluster", "position": "at the water edge", "maxUses": 3, "respawnMinutes": 30, "lootTable": [{ "itemId": "swamp_herb", "chance": 0.70, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "blue_herb", "chance": 0.30, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "swamp_reed", "chance": 0.40, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": null, "minPlayerLevel": 10 },
+      { "nodeId": "rd_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Bog Ore Deposit", "position": "in riverbank mud", "maxUses": 2, "respawnMinutes": 60, "lootTable": [{ "itemId": "bog_ore", "chance": 0.80, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "iron_ore", "chance": 0.30, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": "pickaxe", "minPlayerLevel": 10 }
+    ],
+    "crystal_badlands": [
+      { "nodeId": "cb_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Crystal Deposit", "position": "among crystalline rocks", "maxUses": 3, "respawnMinutes": 60, "lootTable": [{ "itemId": "crystal_shard", "chance": 0.60, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "mana_crystal_raw", "chance": 0.20, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "quartz", "chance": 0.40, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": "pickaxe", "minPlayerLevel": 20 }
+    ],
+    "emberveil_volcanic_road": [
+      { "nodeId": "ev_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Magma Ore Vein", "position": "near volcanic vents", "maxUses": 3, "respawnMinutes": 60, "lootTable": [{ "itemId": "magma_ore", "chance": 0.50, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "ember_shard", "chance": 0.60, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "coal", "chance": 0.30, "qtyMin": 1, "qtyMax": 2 }], "requiresTool": "pickaxe", "minPlayerLevel": 28 },
+      { "nodeId": "ev_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Phoenix Bloom Patch", "position": "near volcanic vents", "maxUses": 2, "respawnMinutes": 60, "lootTable": [{ "itemId": "phoenix_bloom", "chance": 0.40, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "ember_shard", "chance": 0.30, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 28 }
+    ],
+    "mirefen_swamp": [
+      { "nodeId": "ms_herb_01", "nodeType": "herb_patch", "verb": "gather", "name": "Swamp Herb Cluster", "position": "near the mossy log", "maxUses": 3, "respawnMinutes": 30, "lootTable": [{ "itemId": "swamp_herb", "chance": 0.80, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "poison_mushroom", "chance": 0.40, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "blue_herb", "chance": 0.25, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "swamp_reed", "chance": 0.50, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 28 },
+      { "nodeId": "ms_ore_01", "nodeType": "mining_vein", "verb": "mine", "name": "Bog Ore Vein", "position": "jutting from submerged rocks", "maxUses": 2, "respawnMinutes": 60, "lootTable": [{ "itemId": "bog_ore", "chance": 0.85, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "iron_ore", "chance": 0.35, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "dark_crystal", "chance": 0.10, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": "pickaxe", "minPlayerLevel": 28 }
+    ],
+    "void_frontier": [
+      { "nodeId": "vf_void_01", "nodeType": "herb_patch", "verb": "attune", "name": "Void Rift", "position": "tearing reality at void edge", "maxUses": 2, "respawnMinutes": 120, "lootTable": [{ "itemId": "void_core_shard", "chance": 0.40, "qtyMin": 1, "qtyMax": 1 }, { "itemId": "void_essence", "chance": 0.50, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "void_herb", "chance": 0.30, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 92 }
+    ],
+    "abyssal_approach": [
+      { "nodeId": "aa_void_01", "nodeType": "herb_patch", "verb": "attune", "name": "Abyssal Rift", "position": "the dark edge of the abyss", "maxUses": 2, "respawnMinutes": 120, "lootTable": [{ "itemId": "void_core_shard", "chance": 0.50, "qtyMin": 1, "qtyMax": 2 }, { "itemId": "void_essence", "chance": 0.60, "qtyMin": 1, "qtyMax": 3 }, { "itemId": "void_herb", "chance": 0.40, "qtyMin": 1, "qtyMax": 1 }], "requiresTool": null, "minPlayerLevel": 95 }
+    ]
+  }
 }

@@ -28,7 +28,7 @@ import {
 } from './CombatTimerEngine';
 import { resolveVictory, resolveDefeat, createCombatSession, generateEncounter } from './CombatEngine';
 import { computeAttack } from './PlayerEngine';
-import { getArea } from '../../data/areas';
+import { getArea, getDungeonForArea } from '../content/ContentManager';
 import { getDungeonChestLoot } from './LootEngine';
 
 interface PartyCombatHandle {

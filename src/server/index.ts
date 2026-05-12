@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { SaveFile, CombatSession, GameSession, RegenState, CombatParticipant, PartyCombatSession } from '../types';
-import { loadAllCatalogs } from './content/ContentManager';
+import { loadAllCatalogs, loadGatheringNodes } from './content/ContentManager';
 import { startWatcher } from './content/HotReloadWatcher';
 import { createDefaultSave } from './engine/PlayerEngine';
 import { computeAttack } from './engine/PlayerEngine';
@@ -49,6 +49,7 @@ console.log(`[Server] WebSocket listening on ws://localhost:${PORT}`);
 
 // Load game content catalogs
 loadAllCatalogs();
+loadGatheringNodes();
 
 // Load and check game events
 loadEvents();

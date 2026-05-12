@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { SaveFile, CombatSession, GameSession, RegenState, CombatParticipant, PartyCombatSession } from '../types';
+import { loadAllCatalogs } from './content/ContentManager';
 import { createDefaultSave } from './engine/PlayerEngine';
 import { computeAttack } from './engine/PlayerEngine';
 import { saveSave, loadSave, registerPlayer } from './persistence/SaveManager';
@@ -43,6 +44,9 @@ function broadcastPush(session: GameSession, channel: string, text: string): voi
 
 const wss = new WebSocketServer({ port: PORT });
 console.log(`[Server] WebSocket listening on ws://localhost:${PORT}`);
+
+// Load game content catalogs
+loadAllCatalogs();
 
 wss.on('connection', async (socket, _req) => {
   const sessionId = uuid();

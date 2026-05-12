@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { SaveFile, CombatSession, GameSession, RegenState, CombatParticipant, PartyCombatSession } from '../types';
 import { loadAllCatalogs } from './content/ContentManager';
+import { startWatcher } from './content/HotReloadWatcher';
 import { createDefaultSave } from './engine/PlayerEngine';
 import { computeAttack } from './engine/PlayerEngine';
 import { saveSave, loadSave, registerPlayer } from './persistence/SaveManager';
@@ -47,6 +48,9 @@ console.log(`[Server] WebSocket listening on ws://localhost:${PORT}`);
 
 // Load game content catalogs
 loadAllCatalogs();
+
+// Start content hot-reload watcher (dev mode only)
+startWatcher(process.env.NODE_ENV !== 'production');
 
 wss.on('connection', async (socket, _req) => {
   const sessionId = uuid();

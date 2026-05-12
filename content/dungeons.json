@@ -1,0 +1,66 @@
+{
+  "goblin_warren": {
+    "id": "goblin_warren",
+    "name": "Goblin Warren",
+    "entrance": "goblin_warren_entrance",
+    "unlockArea": "whispering_plains",
+    "bossId": "goblin_chieftain",
+    "floors": [
+      { "floor": 1, "areaId": "goblin_warren_entrance", "enemyCount": [1, 2], "eliteChance": 0.05, "bossFloor": false },
+      { "floor": 2, "areaId": "goblin_warren_f2", "enemyCount": [1, 3], "eliteChance": 0.08, "bossFloor": false },
+      { "floor": 3, "areaId": "goblin_warren_f3", "enemyCount": [1, 3], "eliteChance": 0.12, "bossFloor": true }
+    ]
+  },
+  "thornwick_ruins": {
+    "id": "thornwick_ruins",
+    "name": "Thornwick Ruins",
+    "entrance": "thornwick_ruins_entrance",
+    "unlockArea": "thornwick_square",
+    "bossId": "treant_ancient",
+    "floors": [
+      { "floor": 1, "areaId": "thornwick_ruins_entrance", "enemyCount": [1, 3], "eliteChance": 0.1, "bossFloor": false },
+      { "floor": 2, "areaId": "thornwick_ruins_f2", "enemyCount": [2, 3], "eliteChance": 0.15, "bossFloor": false },
+      { "floor": 3, "areaId": "thornwick_ruins_f3", "enemyCount": [2, 4], "eliteChance": 0.2, "bossFloor": true }
+    ]
+  },
+  "sunken_mines": {
+    "id": "sunken_mines",
+    "name": "Sunken Mines",
+    "entrance": "sunken_mines_entrance",
+    "unlockArea": "iron_gate_town_square",
+    "bossId": "mine_wyrm",
+    "floors": [
+      { "floor": 1, "areaId": "sunken_mines_entrance", "enemyCount": [1, 3], "eliteChance": 0.12, "bossFloor": false },
+      { "floor": 2, "areaId": "sunken_mines_f2", "enemyCount": [2, 3], "eliteChance": 0.15, "bossFloor": false },
+      { "floor": 3, "areaId": "sunken_mines_f3", "enemyCount": [1, 3], "eliteChance": 0.18, "bossFloor": false },
+      { "floor": 4, "areaId": "sunken_mines_f4", "enemyCount": [2, 4], "eliteChance": 0.22, "bossFloor": false },
+      { "floor": 5, "areaId": "sunken_mines_f5", "enemyCount": [2, 4], "eliteChance": 0.28, "bossFloor": true }
+    ]
+  },
+  "mirefen_catacombs": {
+    "id": "mirefen_catacombs",
+    "name": "Mirefen Catacombs",
+    "entrance": "mirefen_catacombs_entrance",
+    "unlockArea": "mirefen_swamp",
+    "bossId": "lich_lord",
+    "floors": [
+      { "floor": 1, "areaId": "mirefen_catacombs_entrance", "enemyCount": [2, 3], "eliteChance": 0.15, "bossFloor": false },
+      { "floor": 2, "areaId": "mirefen_catacombs_f2", "enemyCount": [2, 4], "eliteChance": 0.2, "bossFloor": false },
+      { "floor": 3, "areaId": "mirefen_catacombs_f3", "enemyCount": [2, 4], "eliteChance": 0.25, "bossFloor": true }
+    ]
+  },
+  "dragons_lair": {
+    "id": "dragons_lair",
+    "name": "Dragon's Lair",
+    "entrance": "dragons_lair_entrance",
+    "unlockArea": "cinderpeak_square",
+    "bossId": "ancient_dragon",
+    "floors": [
+      { "floor": 1, "areaId": "dragons_lair_entrance", "enemyCount": [2, 3], "eliteChance": 0.25, "bossFloor": false },
+      { "floor": 2, "areaId": "dragons_lair_f2", "enemyCount": [2, 4], "eliteChance": 0.3, "bossFloor": false },
+      { "floor": 3, "areaId": "dragons_lair_f3", "enemyCount": [3, 4], "eliteChance": 0.35, "bossFloor": false },
+      { "floor": 4, "areaId": "dragons_lair_f4", "enemyCount": [3, 4], "eliteChance": 0.4, "bossFloor": false },
+      { "floor": 5, "areaId": "dragons_lair_boss", "enemyCount": [1, 1], "eliteChance": 1.0, "bossFloor": true }
+    ]
+  }
+}

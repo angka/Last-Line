@@ -635,6 +635,15 @@ wss.on('connection', async (socket, _req) => {
       if (hadCombat && !nowHasCombat) {
         // Combat ended — clear timer
         clearCombatTimer(session);
+
+        // Phase 11: Check for level-up rewards after combat
+        const { checkAndGrantLevelRewards } = await import('./persistence/CosmeticDbManager');
+        const levelRewards = await checkAndGrantLevelRewards(session.playerId, newSave.stats.level);
+        if (levelRewards.length > 0) {
+          const rewardText = levelRewards.map(r => `  🎁 Reward unlocked: ${r.title}!`).join('\n');
+          socket.send(JSON.stringify({ type: 'output', text: result.text + '\n' + rewardText }));
+          return;
+        }
       } else if (!hadCombat && nowHasCombat) {
         // Combat started — wire 15s timer
         startCombatTimer(session, result.combatState);

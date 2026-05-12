@@ -328,3 +328,24 @@ export async function getClaimedRewardIds(playerId: string): Promise<string[]> {
   if (!rows.length) return [];
   return rows[0].values.map((r: any[]) => r[0] as string);
 }
+
+// ─── Level Rewards (Phase 11) ────────────────────────────────────────────────
+
+export async function checkAndGrantLevelRewards(playerId: string, newLevel: number): Promise<CosmeticReward[]> {
+  const rewards = await getAvailableRewards(playerId);
+  const granted: CosmeticReward[] = [];
+
+  for (const reward of rewards) {
+    if (reward.triggerType === 'level') {
+      try {
+        const value = JSON.parse(reward.triggerValue ?? '{}');
+        if (value.level && newLevel >= value.level) {
+          await claimReward(playerId, reward.rewardId);
+          granted.push(reward);
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
+  return granted;
+}

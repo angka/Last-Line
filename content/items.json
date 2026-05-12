@@ -164,8 +164,8 @@
     "consumable": true,
     "healAmount": 200,
     "stackable": true,
-    "buyPrice": 60,
-    "sellPrice": 30,
+    "buyPrice": 80,
+    "sellPrice": 40,
     "tradelock": false
   },
   "mana_potion_1": {

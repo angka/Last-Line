@@ -84,13 +84,13 @@
     "id": "cave_bat",
     "name": "Cave Bat",
     "level": 6,
-    "maxHp": 50,
-    "attack": 13,
-    "strength": 4,
+    "maxHp": 60,
+    "attack": 15,
+    "strength": 5,
     "agility": 10,
-    "defense": 3,
-    "expReward": 30,
-    "goldReward": 15
+    "defense": 4,
+    "expReward": 35,
+    "goldReward": 18
   },
   "mine_rat": {
     "id": "mine_rat",
@@ -112,7 +112,7 @@
     "attack": 18,
     "strength": 8,
     "agility": 4,
-    "defense": 10,
+    "defense": 8,
     "expReward": 65,
     "goldReward": 30
   },

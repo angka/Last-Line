@@ -42,8 +42,13 @@ function loadJson<T>(filename: string): T {
     console.warn(`[ContentManager] File not found: ${filePath}`);
     return {} as T;
   }
-  const content = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(content) as T;
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(content) as T;
+  } catch (err) {
+    console.error(`[ContentManager] Failed to parse ${filename}: ${err}`);
+    return {} as T;
+  }
 }
 
 export function loadAllCatalogs(): void {

@@ -122,6 +122,12 @@ async function ensureDb(): Promise<SqlJsDatabase> {
             expires_at    TEXT,
             is_active     INTEGER DEFAULT 1
           );
+
+          CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_log(admin_id);
+          CREATE INDEX IF NOT EXISTS idx_audit_performed ON admin_audit_log(performed_at);
+          CREATE INDEX IF NOT EXISTS idx_bans_player ON player_bans(player_id);
+          CREATE INDEX IF NOT EXISTS idx_bans_active ON player_bans(is_active, expires_at);
+          CREATE INDEX IF NOT EXISTS idx_sessions_admin ON admin_sessions(admin_id);
         `);
         // Seed default admin: admin / changeme
         const bcrypt = await import('bcryptjs');

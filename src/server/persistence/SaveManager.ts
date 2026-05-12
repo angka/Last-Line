@@ -37,6 +37,10 @@ async function ensureDb(): Promise<SqlJsDatabase> {
             PRIMARY KEY (player_id, slot),
             FOREIGN KEY (player_id) REFERENCES players(player_id)
           );
+
+          CREATE INDEX IF NOT EXISTS idx_saves_player ON saves(player_id);
+          CREATE INDEX IF NOT EXISTS idx_saves_level ON saves(level);
+          CREATE INDEX IF NOT EXISTS idx_saves_area ON saves(area);
         `);
         saveToDisk();
       }

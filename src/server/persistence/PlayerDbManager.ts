@@ -108,6 +108,11 @@ async function ensureDb(): Promise<SqlJsDatabase> {
             FOREIGN KEY (player_id) REFERENCES players(id),
             FOREIGN KEY (blocked_id) REFERENCES players(id)
           );
+
+          CREATE INDEX IF NOT EXISTS idx_auth_player ON player_auth_tokens(player_id);
+          CREATE INDEX IF NOT EXISTS idx_friends_status ON friends(player_id, status);
+          CREATE INDEX IF NOT EXISTS idx_blocks_player ON blocks(player_id);
+          CREATE INDEX IF NOT EXISTS idx_players_steam ON players(steam_id);
         `);
         saveToDisk();
       }

@@ -88,6 +88,9 @@ async function ensureDb(): Promise<SqlJsDatabase> {
             claimed_at TEXT NOT NULL,
             PRIMARY KEY (player_id, reward_id)
           );
+
+          CREATE INDEX IF NOT EXISTS idx_player_cosmetics_equipped ON player_cosmetics(player_id, equipped);
+          CREATE INDEX IF NOT EXISTS idx_cosmetics_category ON cosmetics(category);
         `);
         seedDefaultCosmetics(_db);
         seedDefaultRewards(_db);

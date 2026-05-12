@@ -10,6 +10,25 @@ export interface Area {
   regenState: 'exploring' | 'safe_area' | 'city';
 }
 
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export type ItemType = 'weapon' | 'armor' | 'consumable' | 'material' | 'accessory' | 'quest' | 'key';
+export type EquipSlot = 'head' | 'chest' | 'legs' | 'feet' | 'hands' | 'weapon' | 'offhand' | 'accessory1' | 'accessory2' | 'ring';
+
+export interface StatusEffect {
+  id: string;
+  name: string;
+  type: 'poison' | 'burn' | 'freeze' | 'paralyze' | 'sleep' | 'stun' | 'blind' | 'silence';
+  remainingTurns: number;
+  value: number;
+}
+
+export interface ConsumableEffect {
+  type: 'heal' | 'mana' | 'buff' | 'debuff' | 'revive';
+  value: number;
+  duration?: number;
+  stat?: string;
+}
+
 export interface Enemy {
   id: string;
   name: string;
@@ -21,7 +40,7 @@ export interface Enemy {
   defense: number;
   expReward: number;
   goldReward: number;
-  statusEffects?: any[];
+  statusEffects?: StatusEffect[];
   lootTable?: string[];
   skills?: string[];
 }
@@ -29,14 +48,14 @@ export interface Enemy {
 export interface Item {
   id: string;
   name: string;
-  type: string;
-  slot?: string;
-  rarity: string;
+  type: ItemType;
+  slot?: EquipSlot;
+  rarity: Rarity;
   price: number;
   buyable: boolean;
   description: string;
   stats?: Record<string, number>;
-  consumeEffect?: any;
+  consumeEffect?: ConsumableEffect;
   stackable?: boolean;
 }
 

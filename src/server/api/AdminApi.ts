@@ -480,6 +480,15 @@ app.delete('/admin/worldboss', adminAuth, (req, res) => {
 // ─── Content Reload ────────────────────────────────────────────────────────────
 
 import { manualReload } from '../content/HotReloadWatcher';
+import { getAllEvents } from '../content/EventEngine';
+
+// Content catalog file paths
+const CONTENT_DIR = path.join(__dirname, '..', '..', 'content');
+const CATALOG_MAP: Record<string, string> = {
+  areas: 'areas.json', enemies: 'enemies.json', items: 'items.json',
+  skills: 'skills.json', crafting: 'crafting.json', dungeons: 'dungeons.json',
+  shops: 'shops.json', events: 'events.json',
+};
 
 app.post('/admin/content/reload', adminAuth, (req, res) => {
   const admin = (req as any).admin;
@@ -489,6 +498,86 @@ app.post('/admin/content/reload', adminAuth, (req, res) => {
     res.json({ success: true, message: result.message });
   } else {
     res.status(500).json({ success: false, error: result.message });
+  }
+});
+
+app.get('/admin/content/:catalog', adminAuth, (req, res) => {
+  const catalog = req.params.catalog as string;
+  const filename = CATALOG_MAP[catalog];
+  if (!filename) { res.status(400).json({ error: 'Unknown catalog' }); return; }
+  const filePath = path.join(CONTENT_DIR, filename);
+  try {
+    if (!fs.existsSync(filePath)) { res.status(404).json({ error: 'Catalog not found' }); return; }
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw);
+    res.json({ data, catalog, path: filename });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to read catalog: ' + e.message });
+  }
+});
+
+app.post('/admin/content/save', adminAuth, (req, res) => {
+  const admin = (req as any).admin;
+  const { catalog, json } = req.body;
+  const filename = CATALOG_MAP[catalog];
+  if (!filename) { res.status(400).json({ error: 'Unknown catalog' }); return; }
+  const filePath = path.join(CONTENT_DIR, filename);
+  try {
+    JSON.parse(json); // validate
+    fs.writeFileSync(filePath, json, 'utf-8');
+    const result = manualReload();
+    adminAudit(admin, 'SAVE_CONTENT', 'server', catalog, { catalog, filename }, extractIp(req));
+    res.json({ success: result.success, message: result.message });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Events
+app.get('/admin/events', adminAuth, (_req, res) => {
+  const allEvents = getAllEvents();
+  const eventList = Object.values(allEvents).map(ev => ({
+    id: ev.id,
+    title: ev.title,
+    type: ev.type,
+    startTime: ev.startTime,
+    endTime: ev.endTime,
+    effects: ev.effects,
+    description: ev.description,
+  }));
+  res.json(eventList);
+});
+
+app.post('/admin/events', adminAuth, (req, res) => {
+  const admin = (req as any).admin;
+  const event = req.body;
+  if (!event.id || !event.title || !event.type) {
+    res.status(400).json({ success: false, error: 'id, title, and type are required' });
+    return;
+  }
+  try {
+    const filePath = path.join(CONTENT_DIR, 'events.json');
+    let data: Record<string, any> = {};
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      data = JSON.parse(raw);
+    }
+    if (!data.events) data.events = {};
+    delete data.events[event.id];
+    data.events[event.id] = {
+      id: event.id,
+      title: event.title,
+      type: event.type,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      effects: event.effects || {},
+      description: event.description || '',
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    adminAudit(admin, 'CREATE_EVENT', 'server', event.id, event, extractIp(req));
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

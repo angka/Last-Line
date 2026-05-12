@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Last Line — Admin Panel</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d12; --bg2: #13131c; --bg3: #1a1a26;
+      --border: #2a2a3e; --accent: #7c3aed; --accent2: #a855f7;
+      --text: #e2e2f0; --text2: #9090b0; --text3: #5a5a78;
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308;
+      --blue: #3b82f6;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── Login ── */
+    #login-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 360px; }
+    .login-box h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    .login-box p { color: var(--text2); font-size: 0.875rem; margin-bottom: 28px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text2); margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 10px 12px; font-size: 0.9rem; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    button {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    button:hover { background: var(--accent2); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.danger { background: var(--red); }
+    button.danger:hover { background: #dc2626; }
+    button.success { background: var(--green); }
+    button.success:hover { background: #16a34a; }
+    button.small { padding: 6px 12px; font-size: 0.8rem; }
+    button.warning { background: var(--yellow); color: #111; }
+    .error-msg { background: #7f1d1d; border: 1px solid #b91c1c; color: #fca5a5; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 0.875rem; display: none; }
+
+    /* ── App shell ── */
+    #app { display: none; }
+    .app-header {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
+      height: 56px; position: sticky; top: 0; z-index: 100;
+    }
+    .app-header h1 { font-size: 1rem; font-weight: 600; }
+    .app-header .user-info { display: flex; align-items: center; gap: 12px; }
+    .role-badge { background: var(--accent); border-radius: 12px; padding: 2px 10px; font-size: 0.75rem; }
+    .role-badge.super { background: #b45309; }
+
+    /* ── Sidebar nav ── */
+    .app-body { display: flex; min-height: calc(100vh - 56px); }
+    .sidebar {
+      width: 200px; background: var(--bg2); border-right: 1px solid var(--border);
+      padding: 16px 0; flex-shrink: 0;
+    }
+    .sidebar button {
+      width: 100%; background: none; border-radius: 0; color: var(--text2);
+      padding: 10px 20px; font-size: 0.875rem; text-align: left; justify-content: flex-start;
+      border-left: 3px solid transparent;
+    }
+    .sidebar button:hover { background: var(--bg3); color: var(--text); }
+    .sidebar button.active { background: var(--bg3); color: var(--accent); border-left-color: var(--accent); }
+
+    /* ── Main content ── */
+    .main-content { flex: 1; padding: 24px; overflow: auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .page-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; }
+    .card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px; margin-bottom: 16px;
+    }
+    .card-title { font-size: 0.875rem; color: var(--text2); margin-bottom: 12px; font-weight: 500; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .stat-box { background: var(--bg3); border-radius: 8px; padding: 14px 16px; }
+    .stat-box .val { font-size: 1.5rem; font-weight: 700; }
+    .stat-box .label { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
+    .stat-box.green .val { color: var(--green); }
+    .stat-box.red .val { color: var(--red); }
+    .stat-box.blue .val { color: var(--blue); }
+    .stat-box.yellow .val { color: var(--yellow); }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { text-align: left; padding: 8px 12px; color: var(--text2); border-bottom: 1px solid var(--border); font-weight: 500; white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: var(--bg3); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+    .badge.online { background: #052e16; color: var(--green); }
+    .badge.offline { background: #1c1c28; color: var(--text3); }
+    .badge.banned { background: #450a0a; color: var(--red); }
+    .badge.active { background: #052e16; color: var(--green); }
+    .badge.inactive { background: #1c1c28; color: var(--text3); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Player detail ── */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .detail-item { display: flex; flex-direction: column; gap: 2px; }
+    .detail-item .di-label { font-size: 0.75rem; color: var(--text2); }
+    .detail-item .di-value { font-size: 0.9rem; font-weight: 500; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .tab-btn { background: none; color: var(--text2); border: none; border-bottom: 2px solid transparent; padding: 10px 16px; cursor: pointer; font-size: 0.875rem; margin-bottom: -1px; border-radius: 0; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── PvP toggle table ── */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 0.9rem; }
+    .toggle-desc { font-size: 0.75rem; color: var(--text2); margin-top: 2px; }
+    .toggle-switch { position: relative; width: 44px; height: 24px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: var(--bg3); border-radius: 24px; cursor: pointer; transition: 0.2s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: var(--text3); border-radius: 50%; transition: 0.2s; }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); background: #fff; }
+
+    /* ── Audit log ── */
+    .log-entry { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--text3); white-space: nowrap; min-width: 160px; }
+    .log-admin { color: var(--blue); font-weight: 600; min-width: 120px; }
+    .log-action { color: var(--yellow); min-width: 140px; }
+    .log-target { color: var(--text2); }
+    .log-payload { color: var(--text3); font-family: monospace; font-size: 0.75rem; word-break: break-all; }
+
+    /* ── Modal ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 480px; max-width: 90vw; }
+    .modal h2 { font-size: 1.1rem; margin-bottom: 20px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px; font-size: 0.875rem; display: none; z-index: 300; }
+    #toast.show { display: block; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error { border-color: var(--red); color: var(--red); }
+
+    /* ── Misc ── */
+    .flex { display: flex; }
+    .flex-wrap { flex-wrap: wrap; }
+    .gap-8 { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .mt-8 { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-8 { margin-bottom: 8px; }
+    .mb-16 { margin-bottom: 16px; }
+    .text-sm { font-size: 0.8rem; }
+    .text-muted { color: var(--text2); }
+    .w-full { width: 100%; }
+    .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .search-row input { flex: 1; }
+    .inline-form { display: flex; gap: 8px; align-items: flex-end; }
+    .inline-form .form-group { margin-bottom: 0; flex: 1; }
+    .empty-state { text-align: center; padding: 40px; color: var(--text2); }
+    .section-subtitle { font-size: 0.8rem; color: var(--text2); margin-bottom: 12px; }
+    .hp-bar { display: inline-block; width: 80px; height: 6px; background: var(--bg3); border-radius: 3px; vertical-align: middle; overflow: hidden; }
+    .hp-fill { height: 100%; background: var(--green); border-radius: 3px; display: inline-block; }
+    .hp-fill.low { background: var(--red); }
+    .hp-fill.med { background: var(--yellow); }
+  </style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login-view">
+  <div class="login-box">
+    <h1>Last Line — Admin</h1>
+    <p>Sign in with your admin credentials</p>
+    <div class="error-msg" id="login-error"></div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button id="login-btn" onclick="doLogin()" class="w-full">Sign In</button>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+  <div class="app-header">
+    <h1>⚔ Last Line — Admin Panel</h1>
+    <div class="user-info">
+      <span class="text-sm text-muted" id="admin-user"></span>
+      <span class="role-badge" id="admin-role"></span>
+      <button onclick="doLogout()" class="small">Logout</button>
+    </div>
+  </div>
+  <div class="app-body">
+    <div class="sidebar">
+      <button class="active" data-panel="dashboard" onclick="switchPanel('dashboard')">📊 Dashboard</button>
+      <button data-panel="players" onclick="switchPanel('players')">👥 Players</button>
+      <button data-panel="bans" onclick="switchPanel('bans')">🚫 Bans</button>
+      <button data-panel="pvp" onclick="switchPanel('pvp')">⚔ PvP Settings</button>
+      <button data-panel="worldboss" onclick="switchPanel('worldboss')">🐉 World Boss</button>
+      <button data-panel="audit" onclick="switchPanel('audit')">📋 Audit Log</button>
+      <button data-panel="admins" onclick="switchPanel('admins')">👤 Admin Accounts</button>
+      <button data-panel="profile" onclick="switchPanel('profile')">🔐 Profile</button>
+      <button data-panel="content" onclick="switchPanel('content')">📝 Content Editor</button>
+      <button data-panel="events" onclick="switchPanel('events')">🎭 Events</button>
+      <button data-panel="live" onclick="switchPanel('live')">📡 Live View</button>
+    </div>
+    <div class="main-content">
+
+      <!-- Dashboard -->
+      <div class="panel active" id="panel-dashboard">
+        <div class="page-title">Dashboard</div>
+        <div class="card">
+          <div class="card-title">Server Status</div>
+          <div class="stat-grid" id="stats-grid"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Recent Players</div>
+          <div class="table-wrap">
+            <table id="recent-players-table">
+              <thead><tr><th>Name</th><th>Level</th><th>Area</th><th>HP</th><th>Gold</th><th>Actions</th></tr></thead>
+              <tbody id="recent-players-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Players -->
+      <div class="panel" id="panel-players">
+        <div class="page-title">Players Online</div>
+        <div class="search-row">
+          <input type="text" id="player-search" placeholder="Search by name or ID…" oninput="filterPlayers()">
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Lv</th><th>HP</th><th>Area</th><th>Party</th><th>PvP</th><th>Actions</th></tr></thead>
+              <tbody id="players-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Player Detail Modal -->
+      <div class="modal-overlay" id="player-modal">
+        <div class="modal" style="width: 700px; max-height: 85vh; overflow-y: auto;">
+          <div class="flex" style="justify-content: space-between; align-items: center;">
+            <h2 id="modal-player-name">Player</h2>
+            <button class="small" onclick="closeModal('player-modal')">✕</button>
+          </div>
+          <div id="modal-player-body"></div>
+        </div>
+      </div>
+
+      <!-- Bans -->
+      <div class="panel" id="panel-bans">
+        <div class="page-title">Banned Players</div>
+        <div class="card mb-16">
+          <div class="card-title">Ban a Player</div>
+          <div class="inline-form">
+            <div class="form-group"><label>Player ID</label><input type="text" id="ban-player-id" placeholder="uuid"></div>
+            <div class="form-group"><label>Player Name</label><input type="text" id="ban-player-name" placeholder="Name"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="ban-reason" placeholder="Optional"></div>
+            <div class="form-group"><label>Expires (ISO or empty)</label><input type="text" id="ban-expires" placeholder="2026-12-31 or empty"></div>
+            <button onclick="banPlayer()">🚫 Ban Player</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Active Bans</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Player</th><th>Banned By</th><th>Reason</th><th>When</th><th>Expires</th><th>Actions</th></tr></thead>
+              <tbody id="bans-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PvP -->
+      <div class="panel" id="panel-pvp">
+        <div class="page-title">PvP Settings</div>
+        <div class="card mb-16">
+          <div class="card-title">Toggle PvP per area</div>
+          <div class="text-sm text-muted mb-16">PvP is only possible when both players have PvP enabled and the area is unlocked here.</div>
+          <div id="pvp-settings-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">PvP Quick Actions</div>
+          <div class="flex gap-8 flex-wrap">
+            <button onclick="setPvP('global', true)" class="success">Enable PvP Globally</button>
+            <button onclick="setPvP('global', false)" class="danger">Disable PvP Globally</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- World Boss -->
+      <div class="panel" id="panel-worldboss">
+        <div class="page-title">World Boss</div>
+        <div class="card mb-16">
+          <div class="card-title">Active World Boss</div>
+          <div id="wb-active"></div>
+        </div>
+        <div class="card mb-16">
+          <div class="card-title">Boss Definitions</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Name</th><th>Level</th><th>Max HP</th><th>Interval</th><th>Actions</th></tr></thead>
+              <tbody id="wb-defs-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Broadcast Message</div>
+          <div class="inline-form">
+            <div class="form-group"><label>Message</label><input type="text" id="broadcast-msg" placeholder="Server announcement…"></div>
+            <button onclick="sendBroadcast()">📢 Broadcast</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="panel" id="panel-audit">
+        <div class="page-title">Audit Log</div>
+        <div class="flex gap-8 mb-16">
+          <button onclick="loadAudit(0)" class="small">🔄 Refresh</button>
+          <button onclick="loadAudit(prevAuditOffset)" class="small">◀ Prev</button>
+          <button onclick="loadAudit(nextAuditOffset)" class="small">Next ▶</button>
+          <span class="text-sm text-muted" id="audit-pages" style="align-self: center;"></span>
+        </div>
+        <div class="card">
+          <div id="audit-log-list"></div>
+        </div>
+      </div>
+
+      <!-- Admin Accounts -->
+      <div class="panel" id="panel-admins">
+        <div class="page-title">Admin Accounts</div>
+        <div class="card mb-16" id="create-admin-card" style="display:none;">
+          <div class="card-title">Create New Admin</div>
+          <div class="inline-form">
+            <div class="form-group"><label>Username</label><input type="text" id="new-admin-user"></div>
+            <div class="form-group"><label>Password</label><input type="password" id="new-admin-pass"></div>
+            <div class="form-group"><label>Role</label>
+              <select id="new-admin-role">
+                <option value="admin">admin</option>
+                <option value="superadmin">superadmin</option>
+              </select>
+            </div>
+            <button onclick="createAdmin()">Create</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Last Login</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="admins-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile -->
+      <div class="panel" id="panel-profile">
+        <div class="page-title">Admin Profile</div>
+        <div class="card mb-16">
+          <div class="card-title">Change Password</div>
+          <div class="inline-form">
+            <div class="form-group"><label>Current Password</label><input type="password" id="cur-pass"></div>
+            <div class="form-group"><label>New Password</label><input type="password" id="new-pass"></div>
+            <div class="form-group"><label>Confirm</label><input type="password" id="conf-pass"></div>
+            <button onclick="changeMyPassword()">Update Password</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Session Info</div>
+          <div class="detail-grid" id="profile-info"></div>
+        </div>
+      </div>
+
+      <!-- Content Editor -->
+      <div class="panel" id="panel-content">
+        <div class="page-title">Content Editor</div>
+        <div class="card mb-16">
+          <div class="card-title">Edit Content Catalogs</div>
+          <div class="inline-form mb-16">
+            <div class="form-group">
+              <label>Catalog</label>
+              <select id="content-catalog">
+                <option value="areas">Areas</option>
+                <option value="enemies">Enemies</option>
+                <option value="items">Items</option>
+                <option value="skills">Skills</option>
+                <option value="crafting">Crafting</option>
+                <option value="dungeons">Dungeons</option>
+                <option value="shops">Shops</option>
+                <option value="events">Events</option>
+              </select>
+            </div>
+            <button onclick="loadContentCatalog()" class="small">📂 Load</button>
+          </div>
+          <div class="form-group">
+            <label>JSON Content</label>
+            <textarea id="content-json" rows="20" style="font-family:monospace;font-size:0.8rem;width:100%"></textarea>
+          </div>
+          <div class="flex gap-8 mt-8">
+            <button onclick="saveContentCatalog()" class="success">💾 Save & Reload</button>
+            <button onclick="reloadAllContent()" class="small">🔄 Reload All</button>
+          </div>
+          <div id="content-status" class="mt-8 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- Events -->
+      <div class="panel" id="panel-events">
+        <div class="page-title">Event Manager</div>
+        <div class="card mb-16">
+          <div class="card-title">Active Events</div>
+          <div id="active-events-list"></div>
+        </div>
+        <div class="card mb-16">
+          <div class="card-title">All Events</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+              <tbody id="events-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Create New Event</div>
+          <div class="inline-form">
+            <div class="form-group"><label>Event ID</label><input type="text" id="event-id" placeholder="my_event"></div>
+            <div class="form-group"><label>Title</label><input type="text" id="event-title" placeholder="Event Title"></div>
+            <div class="form-group"><label>Type</label>
+              <select id="event-type">
+                <option value="bonus_exp">Bonus EXP</option>
+                <option value="drop_modifier">Drop Modifier</option>
+                <option value="enemy_spawn">Enemy Spawn</option>
+                <option value="treasure_spawn">Treasure Spawn</option>
+                <option value="area_spawn">Area Spawn</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Start (ISO)</label><input type="text" id="event-start" placeholder="2026-05-15T00:00:00Z"></div>
+            <div class="form-group"><label>End (ISO)</label><input type="text" id="event-end" placeholder="2026-05-17T23:59:59Z"></div>
+          </div>
+          <button onclick="createEvent()" class="mt-8">Create Event</button>
+        </div>
+      </div>
+
+      <!-- Live View -->
+      <div class="panel" id="panel-live">
+        <div class="page-title">Live View</div>
+        <div class="card mb-16">
+          <div class="card-title">Server Status</div>
+          <div class="stat-grid" id="live-stats"></div>
+        </div>
+        <div class="card mb-16">
+          <div class="card-title">Active Events</div>
+          <div id="live-events"></div>
+        </div>
+        <div class="card mb-16">
+          <div class="card-title">Content Status</div>
+          <div class="detail-grid" id="content-status-grid"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Quick Actions</div>
+          <div class="flex gap-8 flex-wrap">
+            <button onclick="reloadAllContent()" class="small">🔄 Reload Content</button>
+            <button onclick="loadLiveView()" class="small">🔄 Refresh</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/admin';
+const P = API;
+let token = localStorage.getItem('admin_token') || '';
+let currentAdmin = null;
+let allPlayers = [];
+let prevAuditOffset = 0, nextAuditOffset = 0;
+
+function getHeaders() {
+  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+}
+function get(path) { return fetch(P + path, { headers: getHeaders() }).then(r => r.json()); }
+function post(path, body) { return fetch(P + path, { method:'POST', headers: getHeaders(), body: JSON.stringify(body) }).then(r => r.json()); }
+function del(path) { return fetch(P + path, { method:'DELETE', headers: getHeaders() }).then(r => r.json()); }
+
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `show ${type}`;
+  setTimeout(() => el.className = '', 3000);
+}
+
+function showErr(elId, msg) {
+  const e = document.getElementById(elId);
+  e.textContent = msg; e.style.display = 'block';
+  setTimeout(() => e.style.display = 'none', 4000);
+}
+
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  try {
+    const r = await fetch('/api/admin/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    }).then(r => r.json());
+    if (r.token) {
+      token = r.token;
+      currentAdmin = r.admin;
+      localStorage.setItem('admin_token', token);
+      showApp();
+    } else {
+      showErr('login-error', r.error || 'Login failed');
+    }
+  } catch(e) { showErr('login-error', 'Connection error'); }
+  btn.disabled = false;
+}
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogout() {
+  await post('/logout', {});
+  localStorage.removeItem('admin_token');
+  token = ''; currentAdmin = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-view').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('admin-user').textContent = currentAdmin.username;
+  const roleEl = document.getElementById('admin-role');
+  roleEl.textContent = currentAdmin.role;
+  roleEl.className = 'role-badge' + (currentAdmin.role === 'superadmin' ? ' super' : '');
+  if (currentAdmin.role === 'superadmin') {
+    document.getElementById('create-admin-card').style.display = 'block';
+    document.getElementById('panel-admins').querySelector('.page-title').textContent = 'Admin Accounts (superadmin)';
+  }
+  loadDashboard();
+}
+
+function switchPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelector(`.sidebar button[data-panel="${name}"]`)?.classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'players') loadPlayers();
+  if (name === 'bans') loadBans();
+  if (name === 'pvp') loadPvP();
+  if (name === 'worldboss') loadWorldBoss();
+  if (name === 'audit') loadAudit(0);
+  if (name === 'admins') loadAdmins();
+  if (name === 'profile') loadProfile();
+  if (name === 'content') loadContentCatalog();
+  if (name === 'events') loadEvents();
+  if (name === 'live') loadLiveView();
+}
+
+// ── Dashboard ──
+async function loadDashboard() {
+  try {
+    const stats = await get('/admin/stats');
+    const playersR = await get('/admin/players');
+    const players = playersR.players || [];
+    allPlayers = players;
+
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat-box green"><div class="val">${stats.onlinePlayers ?? 0}</div><div class="label">Online Players</div></div>
+      <div class="stat-box blue"><div class="val">${fmtSec(stats.uptimeSeconds)}</div><div class="label">Uptime</div></div>
+      <div class="stat-box"><div class="val">${stats.memoryHeapMb ?? 0} MB</div><div class="label">Heap</div></div>
+      <div class="stat-box"><div class="val">${stats.activePartyCombats ?? 0}</div><div class="label">Party Combats</div></div>
+      <div class="stat-box red"><div class="val">${stats.activePvPSessions ?? 0}</div><div class="label">PvP Sessions</div></div>
+      <div class="stat-box yellow"><div class="val">${stats.activeWorldBossEvents ?? 0}</div><div class="label">World Boss</div></div>
+      <div class="stat-box"><div class="val">${stats.parties ?? 0}</div><div class="label">Active Parties</div></div>
+    `;
+
+    const tbody = document.getElementById('recent-players-body');
+    tbody.innerHTML = players.slice(0, 20).map(p => `
+      <tr>
+        <td><b>${escHtml(p.name)}</b></td>
+        <td>${p.level}</td>
+        <td class="text-sm">${escHtml(p.area)}</td>
+        <td>${p.hp}/${p.maxHp}</td>
+        <td>${fmtGold(p.gold)}g</td>
+        <td><div class="actions">
+          <button class="small" onclick="viewPlayer('${p.playerId}')">View</button>
+          <button class="small danger" onclick="kickPlayer('${p.playerId}')">Kick</button>
+        </div></td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="empty-state">No players online</td></tr>';
+
+  } catch(e) { toast('Failed to load dashboard', 'error'); }
+}
+
+// ── Players ──
+async function loadPlayers() {
+  const r = await get('/admin/players');
+  allPlayers = r.players || [];
+  renderPlayers(allPlayers);
+}
+function filterPlayers() {
+  const q = document.getElementById('player-search').value.toLowerCase();
+  const filtered = q ? allPlayers.filter(p => p.name.toLowerCase().includes(q) || p.playerId.includes(q)) : allPlayers;
+  renderPlayers(filtered);
+}
+function renderPlayers(players) {
+  const tbody = document.getElementById('players-body');
+  tbody.innerHTML = players.map(p => `
+    <tr>
+      <td><b>${escHtml(p.name)}</b><br><span class="text-sm text-muted">${p.playerId.slice(0,8)}…</span></td>
+      <td>${p.level}</td>
+      <td><span class="hp-bar"><span class="hp-fill ${p.hp/p.maxHp<0.3?'low':p.hp/p.maxHp<0.6?'med':''}" style="width:${Math.round(p.hp/p.maxHp*100)}%"></span></span><br><span class="text-sm">${p.hp}/${p.maxHp}</span></td>
+      <td class="text-sm">${escHtml(p.area)}</td>
+      <td>${p.partyId ? '✅' : '—'}</td>
+      <td>${p.pvpEnabled ? '⚔️' : '—'}</td>
+      <td>
+        <div class="actions">
+          <button class="small" onclick="viewPlayer('${p.playerId}')">View</button>
+          <button class="small" onclick="editStatsPlayer('${p.playerId}')">✏️ Stats</button>
+          <button class="small" onclick="giveGoldPlayer('${p.playerId}')">💰 Gold</button>
+          <button class="small danger" onclick="kickPlayer('${p.playerId}')">Kick</button>
+        </div>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="empty-state">No players found</td></tr>';
+}
+
+// ── Player Detail ──
+async function viewPlayer(playerId) {
+  const r = await get(`/admin/players/${playerId}`);
+  if (r.error) { toast(r.error, 'error'); return; }
+  const p = r.player;
+  document.getElementById('modal-player-name').textContent = p.name + ' — #' + playerId.slice(0,8);
+  document.getElementById('modal-player-body').innerHTML = `
+    <div class="detail-grid mb-16">
+      <div class="detail-item"><div class="di-label">Level</div><div class="di-value">${p.level}</div></div>
+      <div class="detail-item"><div class="di-label">EXP</div><div class="di-value">${p.exp}</div></div>
+      <div class="detail-item"><div class="di-label">HP</div><div class="di-value">${p.hp} / ${p.maxHp}</div></div>
+      <div class="detail-item"><div class="di-label">Mana</div><div class="di-value">${p.mana} / ${p.maxMana}</div></div>
+      <div class="detail-item"><div class="di-label">Gold</div><div class="di-value">${p.gold}g</div></div>
+      <div class="detail-item"><div class="di-label">Area</div><div class="di-value text-sm">${p.area}</div></div>
+      <div class="detail-item"><div class="di-label">City</div><div class="di-value">${p.city || '—'}</div></div>
+      <div class="detail-item"><div class="di-label">Party</div><div class="di-value">${p.partyId ? 'Yes' : 'No'}</div></div>
+      <div class="detail-item"><div class="di-label">PvP Enabled</div><div class="di-value">${p.pvpEnabled ? 'Yes' : 'No'}</div></div>
+      <div class="detail-item"><div class="di-label">Achievements</div><div class="di-value">${p.achievementsUnlocked}</div></div>
+      <div class="detail-item"><div class="di-label">Items</div><div class="di-value">${p.itemsOwned}</div></div>
+      <div class="detail-item"><div class="di-label">Skills</div><div class="di-value">${p.skillsTotal}</div></div>
+    </div>
+    ${p.pvpStats ? `<div class="section-subtitle">PvP Stats</div><div class="detail-grid mb-16">
+      <div class="detail-item"><div class="di-label">Kills</div><div class="di-value">${p.pvpStats.kills}</div></div>
+      <div class="detail-item"><div class="di-label">Deaths</div><div class="di-value">${p.pvpStats.deaths}</div></div>
+      <div class="detail-item"><div class="di-label">ELO</div><div class="di-value">${p.pvpStats.seasonPoints}</div></div>
+      <div class="detail-item"><div class="di-label">Best Streak</div><div class="di-value">${p.pvpStats.bestStreak}</div></div>
+    </div>` : ''}
+    <div class="flex gap-8">
+      <button class="small" onclick="editStatsPlayer('${p.playerId}'); closeModal('player-modal')">✏️ Edit Stats</button>
+      <button class="small" onclick="giveGoldPlayer('${p.playerId}'); closeModal('player-modal')">💰 Give Gold</button>
+      <button class="small danger" onclick="kickPlayer('${p.playerId}'); closeModal('player-modal')">Kick</button>
+    </div>
+  `;
+  document.getElementById('player-modal').classList.add('show');
+}
+
+async function editStatsPlayer(playerId) {
+  const p = allPlayers.find(x => x.playerId === playerId);
+  const lvl = prompt(`Level (current: ${p?.level}):`, String(p?.level ?? 1));
+  if (lvl === null) return;
+  const gold = prompt(`Gold (current: ${p?.gold}):`, String(p?.level ?? 0));
+  if (gold === null) return;
+  const r = await post(`/admin/players/${playerId}/stats`, {
+    level: parseInt(lvl) || undefined,
+  });
+  if (gold) await post(`/admin/players/${playerId}/gold`, { amount: parseInt(gold) - (p?.gold ?? 0) });
+  toast(r.success ? 'Player stats updated' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadPlayers(); loadDashboard();
+}
+
+async function giveGoldPlayer(playerId) {
+  const amt = prompt('Gold amount (+ to give, - to remove):', '1000');
+  if (amt === null) return;
+  const r = await post(`/admin/players/${playerId}/gold`, { amount: parseInt(amt) });
+  toast(r.success ? `Gold updated: ${r.gold}g` : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadPlayers(); loadDashboard();
+}
+
+async function kickPlayer(playerId) {
+  if (!confirm('Kick this player?')) return;
+  const reason = prompt('Reason (optional):', '');
+  const r = await post(`/admin/players/${playerId}/kick`, { reason: reason || '' });
+  toast(r.success ? 'Player kicked' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadPlayers(); loadDashboard();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ── Bans ──
+async function loadBans() {
+  const r = await get('/admin/bans');
+  const tbody = document.getElementById('bans-body');
+  tbody.innerHTML = (r.bans || []).map(b => `
+    <tr>
+      <td><b>${escHtml(b.playerName)}</b><br><span class="text-sm text-muted">${b.playerId.slice(0,8)}…</span></td>
+      <td class="text-sm">${escHtml(b.bannedBy)}</td>
+      <td class="text-sm">${escHtml(b.reason || '—')}</td>
+      <td class="text-sm">${new Date(b.bannedAt).toLocaleString()}</td>
+      <td class="text-sm">${b.expiresAt ? new Date(b.expiresAt).toLocaleString() : 'Permanent'}</td>
+      <td><button class="small success" onclick="unbanPlayer('${b.playerId}')">Unban</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="empty-state">No active bans</td></tr>';
+}
+
+async function banPlayer() {
+  const pid = document.getElementById('ban-player-id').value.trim();
+  const name = document.getElementById('ban-player-name').value.trim();
+  const reason = document.getElementById('ban-reason').value.trim();
+  const expires = document.getElementById('ban-expires').value.trim();
+  if (!pid || !name) { toast('playerId and playerName required', 'error'); return; }
+  const r = await post('/admin/bans', { playerId: pid, playerName: name, reason: reason || undefined, expiresAt: expires || undefined });
+  if (r.success) {
+    document.getElementById('ban-player-id').value = '';
+    document.getElementById('ban-player-name').value = '';
+    document.getElementById('ban-reason').value = '';
+    document.getElementById('ban-expires').value = '';
+  }
+  toast(r.success ? 'Player banned' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadBans(); loadPlayers();
+}
+
+async function unbanPlayer(playerId) {
+  if (!confirm('Unban this player?')) return;
+  const r = await del(`/admin/bans/${playerId}`);
+  toast(r.success ? 'Player unbanned' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadBans();
+}
+
+// ── PvP ──
+async function loadPvP() {
+  const r = await get('/admin/pvp');
+  const settings = r.settings || [];
+  const global = settings.find(s => s.scope === 'global');
+  const cities = ['ashford_village_square','irongate_town_square','thornwick_square','millhaven_town_square',
+    'crystalmere_city','emberveil_plaza','duskhollow_square','stormspire_plaza',
+    'veilreach_square','cinderpeak_plaza','ashenmoor_square','wraithgate_square','obsidian_keep','sanctum_square'];
+
+  document.getElementById('pvp-settings-list').innerHTML = `
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">🌐 Global PvP</div>
+        <div class="toggle-desc">Master switch for all PvP. Must be ON for any area to allow PvP.</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" ${global?.enabled ? 'checked' : ''} onchange="setPvP('global', this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    ${cities.map(c => {
+      const s = settings.find(x => x.scope === c);
+      return `<div class="toggle-row">
+        <div><div class="toggle-label">${c.replace(/_/g,' ')}</div><div class="toggle-desc">Per-city override</div></div>
+        <label class="toggle-switch">
+          <input type="checkbox" ${s?.enabled ? 'checked' : ''} onchange="setPvP('${c}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+async function setPvP(scope, enabled) {
+  const r = await post('/admin/pvp', { scope, enabled });
+  toast(r.success ? `${scope} PvP ${enabled ? 'enabled' : 'disabled'}` : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadPvP();
+}
+
+// ── World Boss ──
+async function loadWorldBoss() {
+  const [defsR, activeR] = await Promise.all([get('/admin/worldboss'), get('/api/status')]);
+  const defs = defsR.definitions || [];
+  const active = defsR.active || [];
+
+  document.getElementById('wb-active').innerHTML = active.length ? active.map(a => `
+    <div class="flex gap-8 mb-8">
+      <div><b>${a.bossId}</b> @ ${a.areaId} — HP: ${a.currentHp}/${a.maxHp} (${a.participants} fighters)
+        <br><span class="text-sm text-muted">Expires: ${new Date(a.expiresAt).toLocaleString()}</span>
+      </div>
+      <button class="small danger" onclick="killWorldBoss('${a.bossId}')">Kill</button>
+    </div>
+  `).join('') : '<span class="text-muted">No active world boss</span>';
+
+  document.getElementById('wb-defs-body').innerHTML = defs.map(d => `
+    <tr>
+      <td><code>${d.id}</code></td>
+      <td>${d.name}</td>
+      <td>${d.level}</td>
+      <td>${d.maxHp.toLocaleString()}</td>
+      <td>${d.spawnIntervalMinutes}min</td>
+      <td><button class="small success" onclick="spawnWorldBoss('${d.id}')">Spawn</button></td>
+    </tr>
+  `).join('');
+}
+
+async function spawnWorldBoss(bossId) {
+  const r = await post('/admin/worldboss/spawn', { bossId });
+  toast(r.success ? `Spawned ${r.bossName}` : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadWorldBoss();
+}
+
+async function killWorldBoss(bossId) {
+  if (!confirm('Kill this boss?')) return;
+  const r = await del(`/admin/worldboss?bossId=${bossId}`);
+  toast(r.success ? 'Boss killed' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadWorldBoss();
+}
+
+async function sendBroadcast() {
+  const msg = document.getElementById('broadcast-msg').value.trim();
+  if (!msg) { toast('Enter a message', 'error'); return; }
+  const r = await post('/admin/broadcast', { message: msg });
+  if (r.success) document.getElementById('broadcast-msg').value = '';
+  toast(r.success ? `Broadcast sent to ${r.recipients} players` : r.error || 'Failed', r.success ? 'success' : 'error');
+}
+
+// ── Audit Log ──
+async function loadAudit(offset) {
+  const r = await get(`/admin/audit?limit=50&offset=${offset}`);
+  const logs = r.logs || [];
+  prevAuditOffset = Math.max(0, offset - 50);
+  nextAuditOffset = logs.length === 50 ? offset + 50 : offset;
+  document.getElementById('audit-pages').textContent = `Showing ${offset + 1}–${offset + logs.length}`;
+  document.getElementById('audit-log-list').innerHTML = logs.map(l => `
+    <div class="log-entry">
+      <span class="log-time">${new Date(l.performedAt).toLocaleString()}</span>
+      <span class="log-admin">${escHtml(l.adminName)}</span>
+      <span class="log-action">[${l.action}]</span>
+      <span class="log-target">${l.targetType}:${l.targetId || '—'}</span>
+      <span class="log-payload">${l.payload ? escHtml(l.payload) : ''}</span>
+    </div>
+  `).join('') || '<div class="empty-state">No audit entries yet</div>';
+}
+
+// ── Admins ──
+async function loadAdmins() {
+  const r = await get('/api/admin/admins');
+  const tbody = document.getElementById('admins-body');
+  tbody.innerHTML = (r.admins || []).map(a => `
+    <tr>
+      <td><b>${escHtml(a.username)}</b></td>
+      <td><span class="badge ${a.role==='superadmin'?'warning':''}">${a.role}</span></td>
+      <td class="text-sm">${new Date(a.createdAt).toLocaleString()}</td>
+      <td class="text-sm">${a.lastLogin ? new Date(a.lastLogin).toLocaleString() : 'Never'}</td>
+      <td><span class="badge ${a.isActive?'active':'inactive'}">${a.isActive?'Active':'Inactive'}</span></td>
+      <td>
+        ${currentAdmin.role === 'superadmin' && a.id !== currentAdmin.id && a.isActive ?
+          `<button class="small danger" onclick="deactivateAdmin('${a.id}')">Deactivate</button>` : '—'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function createAdmin() {
+  const u = document.getElementById('new-admin-user').value.trim();
+  const p = document.getElementById('new-admin-pass').value;
+  const r2 = document.getElementById('new-admin-role').value;
+  if (!u || !p) { toast('Fill all fields', 'error'); return; }
+  const r = await post('/api/admin/admins', { username: u, password: p, role: r2 });
+  if (r.success) {
+    document.getElementById('new-admin-user').value = '';
+    document.getElementById('new-admin-pass').value = '';
+  }
+  toast(r.success ? 'Admin created' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadAdmins();
+}
+
+async function deactivateAdmin(id) {
+  if (!confirm('Deactivate this admin?')) return;
+  const r = await del(`/api/admin/admins/${id}`);
+  toast(r.success ? 'Admin deactivated' : r.error || 'Failed', r.success ? 'success' : 'error');
+  loadAdmins();
+}
+
+// ── Profile ──
+function loadProfile() {
+  document.getElementById('profile-info').innerHTML = `
+    <div class="detail-item"><div class="di-label">Username</div><div class="di-value">${escHtml(currentAdmin.username)}</div></div>
+    <div class="detail-item"><div class="di-label">Role</div><div class="di-value">${currentAdmin.role}</div></div>
+    <div class="detail-item"><div class="di-label">Last Login</div><div class="di-value">${currentAdmin.lastLogin ? new Date(currentAdmin.lastLogin).toLocaleString() : 'Never'}</div></div>
+  `;
+}
+
+async function changeMyPassword() {
+  const cur = document.getElementById('cur-pass').value;
+  const ne = document.getElementById('new-pass').value;
+  const co = document.getElementById('conf-pass').value;
+  if (!cur || !ne) { toast('Fill all fields', 'error'); return; }
+  if (ne !== co) { toast('Passwords do not match', 'error'); return; }
+  if (ne.length < 6) { toast('New password min 6 chars', 'error'); return; }
+  const r = await post('/api/admin/password', { currentPassword: cur, newPassword: ne });
+  if (r.success) {
+    document.getElementById('cur-pass').value = '';
+    document.getElementById('new-pass').value = '';
+    document.getElementById('conf-pass').value = '';
+  }
+  toast(r.success ? 'Password updated' : r.error || 'Failed', r.success ? 'success' : 'error');
+}
+
+// ── Content Editor ──
+async function loadContentCatalog() {
+  const catalog = document.getElementById('content-catalog').value;
+  try {
+    const res = await get(`/admin/content/${catalog}`);
+    document.getElementById('content-json').value = JSON.stringify(res.data, null, 2);
+    document.getElementById('content-status').innerHTML = '<span style="color:var(--green)">Loaded</span>';
+  } catch (e) {
+    document.getElementById('content-status').innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+  }
+}
+
+async function saveContentCatalog() {
+  const catalog = document.getElementById('content-catalog').value;
+  const json = document.getElementById('content-json').value;
+  try {
+    JSON.parse(json);
+  } catch (e) {
+    document.getElementById('content-status').innerHTML = '<span style="color:var(--red)">Invalid JSON</span>';
+    return;
+  }
+  try {
+    const res = await post(`/admin/content/save`, { catalog, json });
+    if (res.success) {
+      document.getElementById('content-status').innerHTML = '<span style="color:var(--green)">Saved and reloaded!</span>';
+    } else {
+      document.getElementById('content-status').innerHTML = '<span style="color:var(--red)">Error: ' + res.error + '</span>';
+    }
+  } catch (e) {
+    document.getElementById('content-status').innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+  }
+}
+
+async function reloadAllContent() {
+  try {
+    const res = await post(`/admin/content/reload`, {});
+    if (res.success) {
+      toast('All catalogs reloaded!', 'success');
+    } else {
+      toast('Error: ' + res.error, 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── Events ──
+async function loadEvents() {
+  const events = await get('/admin/events');
+  const activeList = document.getElementById('active-events-list');
+  const tbody = document.getElementById('events-body');
+
+  const now = new Date().getTime();
+  let activeHtml = '<div class="empty-state">No active events</div>';
+  let rows = '';
+
+  events.forEach(ev => {
+    const start = new Date(ev.startTime).getTime();
+    const end = new Date(ev.endTime).getTime();
+    const isActive = now >= start && now <= end;
+    const remaining = isActive ? Math.max(0, end - now) : 0;
+
+    if (isActive) {
+      const hours = Math.floor(remaining / 3600000);
+      const mins = Math.floor((remaining % 3600000) / 60000);
+      activeHtml = `<div class="badge active">${ev.title} — ${hours}h ${mins}m remaining</div>`;
+    }
+
+    rows += `<tr>
+      <td>${ev.id}</td>
+      <td>${ev.title}</td>
+      <td>${ev.type}</td>
+      <td>${new Date(ev.startTime).toLocaleString()}</td>
+      <td>${new Date(ev.endTime).toLocaleString()}</td>
+      <td>${isActive ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>'}</td>
+    </tr>`;
+  });
+
+  activeList.innerHTML = activeHtml;
+  tbody.innerHTML = rows || '<tr><td colspan="6" class="empty-state">No events defined</td></tr>';
+}
+
+async function createEvent() {
+  const event = {
+    id: document.getElementById('event-id').value,
+    title: document.getElementById('event-title').value,
+    type: document.getElementById('event-type').value,
+    startTime: document.getElementById('event-start').value,
+    endTime: document.getElementById('event-end').value,
+    effects: {},
+    description: 'Custom event'
+  };
+
+  try {
+    const res = await post('/admin/events', event);
+    if (res.success) {
+      toast('Event created!');
+      document.getElementById('event-id').value = '';
+      document.getElementById('event-title').value = '';
+      loadEvents();
+    } else {
+      toast('Error: ' + res.error, 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── Live View ──
+async function loadLiveView() {
+  const stats = await get('/admin/stats');
+  const events = await get('/admin/events');
+
+  document.getElementById('live-stats').innerHTML = `
+    <div class="stat-box green"><div class="val">${stats.onlinePlayers ?? 0}</div><div class="label">Online Players</div></div>
+    <div class="stat-box blue"><div class="val">${fmtSec(stats.uptimeSeconds)}</div><div class="label">Uptime</div></div>
+    <div class="stat-box"><div class="val">${stats.memoryHeapMb ?? 0} MB</div><div class="label">Heap Used</div></div>
+    <div class="stat-box"><div class="val">${stats.activePartyCombats ?? 0}</div><div class="label">Party Combats</div></div>
+    <div class="stat-box yellow"><div class="val">${stats.activeWorldBossEvents ?? 0}</div><div class="label">World Boss</div></div>
+    <div class="stat-box red"><div class="val">${stats.activePvPSessions ?? 0}</div><div class="label">PvP Sessions</div></div>
+  `;
+
+  const now = new Date().getTime();
+  const activeEvents = events.filter(ev => {
+    const start = new Date(ev.startTime).getTime();
+    const end = new Date(ev.endTime).getTime();
+    return now >= start && now <= end;
+  });
+
+  if (activeEvents.length === 0) {
+    document.getElementById('live-events').innerHTML = '<div class="empty-state">No active events</div>';
+  } else {
+    document.getElementById('live-events').innerHTML = activeEvents.map(ev =>
+      `<div class="badge active" style="margin:4px">${ev.icon || '🎭'} ${ev.title}</div>`
+    ).join('');
+  }
+
+  document.getElementById('content-status-grid').innerHTML = `
+    <div class="detail-item"><div class="di-label">Content Loaded</div><div class="di-value">${stats.contentLoaded ? 'Yes' : 'No'}</div></div>
+    <div class="detail-item"><div class="di-label">Last Reload</div><div class="di-value">${stats.contentLoadedAt ? new Date(stats.contentLoadedAt).toLocaleString() : 'N/A'}</div></div>
+    <div class="detail-item"><div class="di-label">Events Loaded</div><div class="di-value">${events.length}</div></div>
+  `;
+}
+
+// ── Utils ──
+function fmtSec(s) {
+  if (!s) return '0s';
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
+}
+function fmtGold(n) { return n?.toLocaleString() ?? '0'; }
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──
+if (token) {
+  fetch(P, { headers: getHeaders() })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(() => {
+      fetch('/api/admin/me', { headers: getHeaders() }).then(r => r.json()).then(me => {
+        currentAdmin = me;
+        showApp();
+      });
+    })
+    .catch(() => {
+      token = '';
+      localStorage.removeItem('admin_token');
+    });
+}
+</script>
+</body>
+</html>

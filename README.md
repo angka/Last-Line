@@ -282,32 +282,52 @@ Create `/etc/systemd/system/last-line.service`:
 [Unit]
 Description=Last Line Game Server
 Documentation=https://github.com/angka/Last-Line
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/last-line
 ExecStart=/usr/bin/node dist/server/index.js
+
+# Auto-restart configuration
 Restart=on-failure
-RestartSec=5
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Restart limits (prevent infinite loops)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logging
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=30
+SyslogIdentifier=last-line
+
+# Security hardening
 NoNewPrivileges=true
+PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/last-line
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
-# Enable and start service
+# Enable auto-start on boot
 sudo systemctl daemon-reload
 sudo systemctl enable last-line
+
+# Start service now
 sudo systemctl start last-line
+
+# Verify auto-start is enabled
+sudo systemctl is-enabled last-line  # Should return "enabled"
 
 # Check status
 sudo systemctl status last-line
@@ -336,11 +356,37 @@ sudo systemctl start last-line      # Start server
 sudo systemctl stop last-line       # Stop server
 sudo systemctl restart last-line     # Restart server
 sudo systemctl status last-line     # Check status
-sudo journalctl -u last-line -f     # View live logs
+sudo journalctl -u last-line -f    # View live logs
+
+# Verify auto-start is enabled (server will start on reboot)
+sudo systemctl is-enabled last-line  # Returns "enabled" if configured
 
 # Alternative: Run directly
 cd /opt/last-line
 npm start
+```
+
+### Auto-Start on Reboot
+
+The game server automatically starts when the server machine reboots.
+
+**Verification:**
+```bash
+# Check if auto-start is enabled
+sudo systemctl is-enabled last-line
+
+# Test by rebooting
+sudo reboot
+# After reboot:
+sudo systemctl status last-line
+```
+
+**If auto-start doesn't work:**
+```bash
+# Re-enable the service
+sudo systemctl reenable last-line
+sudo systemctl daemon-reload
+sudo systemctl start last-line
 ```
 
 ### Default Ports

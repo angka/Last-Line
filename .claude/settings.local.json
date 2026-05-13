@@ -13,7 +13,27 @@
       "Bash(node fix_combat.mjs)",
       "Bash(node fix_combat.cjs)",
       "Bash(echo \"exit $?\")",
-      "Bash(node fix_combat2.cjs)"
+      "Bash(node fix_combat2.cjs)",
+      "mcp__plugin_claude-mem_mcp-search__smart_outline",
+      "Bash(Get-ChildItem src/server -Recurse -Name)",
+      "Bash(Select-Object -First 80)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(Test-Path C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\src *)",
+      "Bash(Test-Path C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\content *)",
+      "Bash(powershell *)",
+      "Bash(New-Item *)",
+      "Bash(npm run *)",
+      "Bash(Select-Object -First 30)",
+      "Bash(Get-Content \"C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\src\\\\server\\\\index.ts\")",
+      "Bash(Select-Object -Skip 395 -First 10)",
+      "Bash(xxd)",
+      "Bash(Select-Object -Last 20)",
+      "Bash(Test-Path C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\src\\\\data\\\\archive *)",
+      "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development npm run start)",
+      "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development timeout 8 npm run start)",
+      "Bash(npm list *)"
     ]
   }
 }

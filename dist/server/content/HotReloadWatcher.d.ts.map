@@ -1,0 +1,1 @@
+{"version":3,"file":"HotReloadWatcher.d.ts","sourceRoot":"","sources":["../../../src/server/content/HotReloadWatcher.ts"],"names":[],"mappings":"AASA,wBAAgB,YAAY,CAAC,OAAO,UAAQ,GAAG,IAAI,CAyClD;AAED,wBAAgB,WAAW,IAAI,IAAI,CAMlC;AAED,wBAAgB,YAAY,IAAI;IAAE,OAAO,EAAE,OAAO,CAAC;IAAC,OAAO,EAAE,MAAM,CAAA;CAAE,CAapE"}

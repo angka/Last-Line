@@ -15,21 +15,23 @@ exports.resolveDefeat = resolveDefeat;
 exports.formatCombatState = formatCombatState;
 exports.formatCombatPrompt = formatCombatPrompt;
 exports.playerSkill = playerSkill;
-const enemies_1 = require("../../data/enemies");
-const skills_1 = require("../../data/skills");
-const dungeons_1 = require("../../data/dungeons");
+const ContentManager_1 = require("../content/ContentManager");
+const ContentManager_2 = require("../content/ContentManager");
+const ContentManager_3 = require("../content/ContentManager");
 const PlayerEngine_1 = require("./PlayerEngine");
 const LootEngine_1 = require("./LootEngine");
+const EventEngine_1 = require("../content/EventEngine");
 const uuid_1 = require("uuid");
 // ─── Encounter Generation ───────────────────────────────────────────────────
 function generateBossEncounter(bossId) {
-    const boss = enemies_1.ENEMIES[bossId];
+    const boss = (0, ContentManager_1.getEnemy)(bossId);
     if (!boss || !boss.isBoss)
         return null;
     return boss;
 }
 function generateEncounter(areaLevelRange, playerLevel, groupSizeMin = 1, groupSizeMax = 2, eliteChance = 0.08) {
-    const pool = Object.values(enemies_1.ENEMIES).filter(e => !e.isBoss && e.level >= areaLevelRange[0] && e.level <= areaLevelRange[1]);
+    const enemies = (0, ContentManager_1.getAllEnemies)();
+    const pool = Object.values(enemies).filter(e => !e.isBoss && e.level >= areaLevelRange[0] && e.level <= areaLevelRange[1]);
     if (pool.length === 0)
         return [];
     const count = Math.min(groupSizeMax, groupSizeMin + Math.floor(Math.random() * (groupSizeMax - groupSizeMin + 1)));
@@ -51,7 +53,7 @@ function generateEncounter(areaLevelRange, playerLevel, groupSizeMin = 1, groupS
             }
         }
         const isElite = i === 0 && Math.random() < eliteChance;
-        chosen.push((0, enemies_1.scaleEnemy)(selected, isElite));
+        chosen.push((0, ContentManager_1.scaleEnemy)(selected, isElite));
     }
     return chosen;
 }
@@ -235,12 +237,17 @@ function resolveVictory(save, session) {
     let totalExp = 0;
     let totalGold = 0;
     for (const enemy of enemies) {
-        totalExp += (0, enemies_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_'))?.expReward
-            ?? (0, enemies_1.getEnemy)(enemy.id)?.expReward ?? 0;
-        totalGold += (0, enemies_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_'))?.goldReward
-            ?? (0, enemies_1.getEnemy)(enemy.id)?.goldReward ?? 0;
+        totalExp += (0, ContentManager_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_'))?.expReward
+            ?? (0, ContentManager_1.getEnemy)(enemy.id)?.expReward ?? 0;
+        totalGold += (0, ContentManager_1.getEnemy)(enemy.id.split('_').slice(0, -2).join('_'))?.goldReward
+            ?? (0, ContentManager_1.getEnemy)(enemy.id)?.goldReward ?? 0;
     }
-    s.stats = { ...s.stats, exp: s.stats.exp + totalExp, gold: s.stats.gold + totalGold };
+    // Apply event multipliers
+    const expMultiplier = (0, EventEngine_1.getExpMultiplier)();
+    const goldMultiplier = (0, EventEngine_1.getGoldMultiplier)();
+    const actualExp = Math.floor(totalExp * expMultiplier);
+    const actualGold = Math.floor(totalGold * goldMultiplier);
+    s.stats = { ...s.stats, exp: s.stats.exp + actualExp, gold: s.stats.gold + actualGold };
     // Level up check
     const levelUps = [];
     while (s.stats.exp >= s.stats.expToNext && s.stats.level < 100) {
@@ -248,7 +255,7 @@ function resolveVictory(save, session) {
         levelUps.push(`  ★ LEVEL UP! You are now level ${s.stats.level}!`);
     }
     // Determine dungeon context for loot
-    const dungeonInfo = (0, dungeons_1.getDungeonForArea)(session.areaId);
+    const dungeonInfo = (0, ContentManager_3.getDungeonForArea)(session.areaId);
     const dungeonTier = dungeonInfo ? (0, LootEngine_1.getDungeonTier)(dungeonInfo.id) : 1;
     const isBossKill = enemies.some(e => e.isBoss);
     // Roll loot
@@ -276,10 +283,13 @@ function resolveVictory(save, session) {
   ╔══════════════════════════════════════════════════════╗
   ║  VICTORY!                                           ║
   ╠══════════════════════════════════════════════════════╣
-  ║  +${String(totalExp).padStart(6)} EXP   +${String(totalGold).padStart(6)} Gold                ║
+  ║  +${String(actualExp).padStart(6)} EXP   +${String(actualGold).padStart(6)} Gold                ║
   ╚══════════════════════════════════════════════════════╝`;
     if (levelUps.length)
         lines += '\n' + levelUps.join('\n');
+    if (expMultiplier > 1 || goldMultiplier > 1) {
+        lines += `\n  [Event Bonus: EXP x${expMultiplier} | Gold x${goldMultiplier}]`;
+    }
     lines += (0, LootEngine_1.formatLootDrops)(lootDrops);
     return s;
 }
@@ -353,8 +363,8 @@ function playerSkill(session, type, skillIndex, save) {
     if (!skill) {
         return { session, newSave: save, text: 'Skill not found.' };
     }
-    const manaCost = (0, skills_1.getSkillManaCost)(skill.level, skill.manaCost);
-    const damageMultiplier = (0, skills_1.getSkillLevelMultiplier)(skill.level);
+    const manaCost = (0, ContentManager_2.getSkillManaCost)(skill.level, skill.manaCost);
+    const damageMultiplier = (0, ContentManager_2.getSkillLevelMultiplier)(skill.level);
     let s = save;
     const enemies = session.participants.filter(p => p.type === 'enemy' && p.hp > 0);
     const targetIdx = 0;

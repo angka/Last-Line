@@ -12,6 +12,8 @@ exports.checkAndUnlockAchievements = checkAndUnlockAchievements;
 exports.applyAchievementReward = applyAchievementReward;
 exports.formatAchievements = formatAchievements;
 exports.formatAchievementUnlock = formatAchievementUnlock;
+exports.processAchievementStats = processAchievementStats;
+exports.formatAchievementUnlockBatch = formatAchievementUnlockBatch;
 exports.serializeAchievementSets = serializeAchievementSets;
 exports.deserializeAchievementSets = deserializeAchievementSets;
 // ─── Achievement Definitions ─────────────────────────────────────────────────
@@ -459,7 +461,85 @@ function formatAchievementUnlock(def) {
         `  ║  ${def.icon} ${String(def.points).padStart(3)} points${reward.padEnd(40)}   ║\n` +
         `  ╚═══════════════════════════════════════════════════════╝`;
 }
-// ─── Serialization helpers (Set → string[] for persistence) ────────────────
+function processAchievementStats(save, updates) {
+    const stats = save.achievementStats ?? {
+        totalKills: 0, bossKills: 0, tradesCompleted: 0, itemsCrafted: 0,
+        resourcesGathered: 0, pvpKills: 0, worldBossKills: 0,
+        dungeonsCleared: [], deepestFloors: {}, visitedAreas: [],
+    };
+    let newStats = { ...stats };
+    if (updates.totalKills !== undefined)
+        newStats.totalKills += updates.totalKills;
+    if (updates.bossKills !== undefined)
+        newStats.bossKills += updates.bossKills;
+    if (updates.tradesCompleted !== undefined)
+        newStats.tradesCompleted += updates.tradesCompleted;
+    if (updates.itemsCrafted !== undefined)
+        newStats.itemsCrafted += updates.itemsCrafted;
+    if (updates.resourcesGathered !== undefined)
+        newStats.resourcesGathered += updates.resourcesGathered;
+    if (updates.pvpKills !== undefined)
+        newStats.pvpKills += updates.pvpKills;
+    if (updates.worldBossKills !== undefined)
+        newStats.worldBossKills += updates.worldBossKills;
+    if (updates.dungeonClear) {
+        newStats.dungeonsCleared = [...new Set([...(stats.dungeonsCleared ?? []), updates.dungeonClear])];
+    }
+    if (updates.dungeonFloorReached) {
+        const { dungeonId, floor } = updates.dungeonFloorReached;
+        const current = (stats.deepestFloors ?? {})[dungeonId] ?? 0;
+        if (floor > current) {
+            newStats.deepestFloors = { ...(stats.deepestFloors ?? {}), [dungeonId]: floor };
+        }
+    }
+    if (updates.areaVisited) {
+        newStats.visitedAreas = [...new Set([...(stats.visitedAreas ?? []), updates.areaVisited])];
+    }
+    // Build AchievementStats with Sets for check
+    const achStats = {
+        totalKills: newStats.totalKills,
+        bossKills: newStats.bossKills,
+        tradesCompleted: newStats.tradesCompleted,
+        itemsCrafted: newStats.itemsCrafted,
+        resourcesGathered: newStats.resourcesGathered,
+        pvpKills: newStats.pvpKills,
+        worldBossKills: newStats.worldBossKills,
+        dungeonsCleared: new Set(newStats.dungeonsCleared),
+        deepestFloors: newStats.deepestFloors,
+        visitedAreas: new Set(newStats.visitedAreas),
+    };
+    // Check unlocks
+    const { newlyUnlocked } = checkAndUnlockAchievements(save, achStats);
+    // Apply rewards
+    let newSave = { ...save, achievementStats: newStats };
+    for (const def of newlyUnlocked) {
+        newSave = applyAchievementReward(newSave, def);
+        newSave.achievements = [
+            ...(newSave.achievements ?? []).filter(a => a.id !== def.id),
+            { id: def.id, unlockedAt: Date.now() },
+        ];
+    }
+    return { save: newSave, newlyUnlocked };
+}
+// ─── Batch format unlock notifications ─────────────────────────────────────────
+function formatAchievementUnlockBatch(unlocked) {
+    if (unlocked.length === 0)
+        return '';
+    const lines = [];
+    for (const def of unlocked) {
+        const reward = def.reward
+            ? `Reward: ${def.reward.exp ? `+${def.reward.exp} EXP ` : ''}${def.reward.gold ? `+${def.reward.gold}g` : ''}`.trim()
+            : '';
+        const ptsLine = `${def.icon} ${String(def.points).padStart(3)} points`;
+        lines.push(`\n  ╔═══════════════════════════════════════════════════════╗` +
+            `\n  ║  🏆 ACHIEVEMENT UNLOCKED: ${def.name.padEnd(30)}║` +
+            `\n  ║  ${def.description.padEnd(54)}║` +
+            `\n  ║  ${ptsLine.padEnd(54)}║` +
+            (reward ? `\n  ║  ${reward.padEnd(54)}║` : '') +
+            `\n  ╚═══════════════════════════════════════════════════════╝`);
+    }
+    return lines.join('');
+}
 function serializeAchievementSets(stats) {
     return {
         dungeonsCleared: [...stats.dungeonsCleared],

@@ -18,7 +18,7 @@ const PartyManager_1 = require("../social/PartyManager");
 const CombatTimerEngine_1 = require("./CombatTimerEngine");
 const CombatEngine_1 = require("./CombatEngine");
 const PlayerEngine_1 = require("./PlayerEngine");
-const areas_1 = require("../../data/areas");
+const ContentManager_1 = require("../content/ContentManager");
 const LootEngine_1 = require("./LootEngine");
 exports.activePartyCombats = new Map();
 // ─── Start Party Combat ────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ function startPartyCombat(partyId, areaId, preGenEnemies) {
     return session;
 }
 function generatePartyEncounter(areaId, partySize) {
-    const area = (0, areas_1.getArea)(areaId);
+    const area = (0, ContentManager_1.getArea)(areaId);
     if (!area)
         return [];
     const avgLevel = getAveragePartyLevel();
@@ -112,6 +112,7 @@ function createMinimalSave() {
         pendingLoot: [],
         socialPrefs: { chatVisible: true, nearbyVisible: true, chatArea: true, chatParty: true, chatShout: true },
         pvp: { enabled: false, safeZone: false },
+        pvpStats: { kills: 0, deaths: 0, winStreak: 0, bestStreak: 0, seasonWins: 0, seasonPoints: 1000 },
         regenState: 'combat',
         achievements: [],
         achievementStats: {

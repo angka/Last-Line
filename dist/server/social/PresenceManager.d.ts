@@ -11,6 +11,8 @@ declare class PresenceManager {
     registerSession(sessionId: string, playerId: string, session: GameSession): void;
     unregisterSession(sessionId: string, playerId: string): void;
     getSession(playerId: string): GameSession | undefined;
+    /** Phase 8: iterate all sessions (for leaderboard) */
+    getAllSessions(): Map<string, GameSession>;
     getSessionBySocket(sessionId: string): GameSession | undefined;
     enter(playerId: string, areaId: string, activity?: PlayerActivity): PresenceEntry | null;
     leave(playerId: string): void;

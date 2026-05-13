@@ -2,32 +2,50 @@
  * Phase 7 — PvP Combat Manager
  * Handles player-vs-player combat in PvP zones.
  * PvP is enabled when both players are in a non-safe-zone and both have `pvp.enabled = true`.
+ * Phase 9: PvP can also be globally or per-city toggled by admin via PvP settings.
  */
 
 import type { PvPCombatSession, PvPParticipant, SaveFile, CombatLogEntry } from '../../types';
 import { presenceManager } from './PresenceManager';
 import { worldBossEngine } from '../engine/WorldBossEngine';
 import { inventoryAdd } from '../items/InventoryManager';
+import { getPvPSettings } from '../persistence/AdminDbManager';
 import { v4 as uuid } from 'uuid';
 
 class PvPManager {
   private activeSessions = new Map<string, PvPCombatSession>();
 
+  // ─── Check if PvP is allowed in an area (admin toggle + safe zone) ───────────
+
+  async isPvPAllowedInArea(areaId: string): Promise<boolean> {
+    // Check global admin PvP setting
+    const global = await getPvPSettings('global');
+    if (!global.enabled) return false;
+    // Check per-city override
+    const citySetting = await getPvPSettings(areaId);
+    if (!citySetting.enabled) return false;
+    return true;
+  }
+
   // ─── Start PvP combat ────────────────────────────────────────────────────
 
-  startPvPCombat(
+  async startPvPCombat(
     attackerId: string,
     attackerSave: SaveFile,
     defenderId: string,
     defenderSave: SaveFile,
     areaId: string,
-  ): { session: PvPCombatSession; attackerText: string; defenderText: string } | null {
+  ): Promise<{ session: PvPCombatSession; attackerText: string; defenderText: string } | null> {
     // Both must have PvP enabled and be in a non-safe zone
     if (attackerSave.pvp.safeZone || !attackerSave.pvp.enabled) return null;
     if (defenderSave.pvp.safeZone || !defenderSave.pvp.enabled) return null;
 
     // Can't fight yourself
     if (attackerId === defenderId) return null;
+
+    // Phase 9: Check admin PvP setting for this area
+    const allowed = await this.isPvPAllowedInArea(areaId);
+    if (!allowed) return null;
 
     const participants: PvPParticipant[] = [
       {

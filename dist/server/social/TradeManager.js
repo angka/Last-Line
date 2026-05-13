@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tradeManager = void 0;
 const PresenceManager_1 = require("./PresenceManager");
 const InventoryManager_1 = require("../items/InventoryManager");
+const AchievementEngine_1 = require("../engine/AchievementEngine");
 const uuid_1 = require("uuid");
 const TRADE_TIMEOUT_MS = 90_000;
 function trySend(socket, data) {
@@ -172,6 +173,11 @@ class TradeManager {
         // Add item to buyer
         const { save: newBuyerSave } = (0, InventoryManager_1.inventoryAdd)(buyerSession.currentState, trade.itemId, 1);
         buyerSession.currentState = newBuyerSave;
+        // Phase 8: Wire trade achievement
+        const { save: sellerAchSave } = (0, AchievementEngine_1.processAchievementStats)(sellerSession.currentState, { tradesCompleted: 1 });
+        const { save: buyerAchSave } = (0, AchievementEngine_1.processAchievementStats)(buyerSession.currentState, { tradesCompleted: 1 });
+        sellerSession.currentState = sellerAchSave;
+        buyerSession.currentState = buyerAchSave;
         trade.status = 'complete';
         const finalMessage = `[Trade] ✓ Trade complete! ${trade.sellerName} sold "${trade.itemName}" to ${trade.buyerName} for ${price}g.`;
         notify(sellerSession.socket, 'trade', finalMessage);

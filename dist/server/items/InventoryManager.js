@@ -7,11 +7,11 @@ exports.inventoryEquip = inventoryEquip;
 exports.inventoryUnequip = inventoryUnequip;
 exports.formatInventoryPage = formatInventoryPage;
 exports.formatEquipment = formatEquipment;
-const items_1 = require("../../data/items");
+const ContentManager_1 = require("../content/ContentManager");
 const uuid_1 = require("uuid");
 const MAX_INVENTORY = 30;
 function inventoryAdd(save, itemId, qty = 1) {
-    const item = (0, items_1.getItem)(itemId);
+    const item = (0, ContentManager_1.getItem)(itemId);
     if (!item)
         return { save, added: 0 };
     // Try to stack
@@ -55,7 +55,7 @@ function inventoryUse(save, slotId) {
     if (idx === -1)
         return save;
     const slot = save.inventory[idx];
-    const item = (0, items_1.getItem)(slot.itemId);
+    const item = (0, ContentManager_1.getItem)(slot.itemId);
     if (!item?.consumable)
         return save;
     let s = { ...save, stats: { ...save.stats } };
@@ -83,7 +83,7 @@ function inventoryEquip(save, slotId) {
     if (idx === -1)
         return save;
     const slot = save.inventory[idx];
-    const item = (0, items_1.getItem)(slot.itemId);
+    const item = (0, ContentManager_1.getItem)(slot.itemId);
     if (!item || !item.equipSlot)
         return save;
     const newInv = [...save.inventory];
@@ -128,7 +128,7 @@ function applyEquipmentBonuses(stats, equipped) {
     for (const itemId of Object.values(equipped)) {
         if (!itemId)
             continue;
-        const item = (0, items_1.getItem)(itemId);
+        const item = (0, ContentManager_1.getItem)(itemId);
         if (!item)
             continue;
         if (item.damage)
@@ -153,7 +153,7 @@ function applyEquipmentBonuses(stats, equipped) {
     return s;
 }
 function unequipIfNeeded(save, itemId) {
-    const item = (0, items_1.getItem)(itemId);
+    const item = (0, ContentManager_1.getItem)(itemId);
     if (!item?.equipSlot)
         return save;
     const slot = save.equipped[item.equipSlot];
@@ -177,12 +177,12 @@ function formatInventoryPage(save, page) {
     else {
         for (let i = 0; i < pageSlots.length; i++) {
             const slot = pageSlots[i];
-            const item = (0, items_1.getItem)(slot.itemId);
+            const item = (0, ContentManager_1.getItem)(slot.itemId);
             if (!item)
                 continue;
             const idx = start + i + 1;
-            const col = (0, items_1.rarityColor)(item.rarity);
-            const r = items_1.RARITY_RESET;
+            const col = (0, ContentManager_1.rarityColor)(item.rarity);
+            const r = ContentManager_1.RARITY_RESET;
             const qty = slot.quantity > 1 ? ` x${slot.quantity}` : '';
             lines.push(`  ║  [${String(idx).padStart(2)}] ${col}${item.name}${r}${qty}                     ║`);
         }
@@ -206,10 +206,10 @@ function formatEquipment(save) {
     for (const [slot, label] of Object.entries(slotLabels)) {
         const itemId = save.equipped[slot];
         if (itemId) {
-            const item = (0, items_1.getItem)(itemId);
+            const item = (0, ContentManager_1.getItem)(itemId);
             if (item) {
-                const col = (0, items_1.rarityColor)(item.rarity);
-                const r = items_1.RARITY_RESET;
+                const col = (0, ContentManager_1.rarityColor)(item.rarity);
+                const r = ContentManager_1.RARITY_RESET;
                 lines.push(`  ║  ${label}: ${col}${item.name}${r}  (${item.rarity})         ║`);
             }
         }

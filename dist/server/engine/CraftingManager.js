@@ -5,33 +5,36 @@ exports.craftItem = craftItem;
 exports.formatCraftingMenu = formatCraftingMenu;
 exports.gatherFromNode = gatherFromNode;
 exports.formatAreaNodes = formatAreaNodes;
-const crafting_1 = require("../../data/crafting");
-const items_1 = require("../../data/items");
+const ContentManager_1 = require("../content/ContentManager");
+const ContentManager_2 = require("../content/ContentManager");
 const InventoryManager_1 = require("../items/InventoryManager");
 // ─── List craftable items ─────────────────────────────────────────────────────
 function listCraftableItems(save) {
-    return crafting_1.CRAFTING_RECIPES.map((recipe, idx) => ({
+    const recipes = (0, ContentManager_1.getAllRecipes)();
+    return Object.values(recipes).map((recipe, idx) => ({
         index: idx,
         recipe,
-        hasMaterials: (0, crafting_1.canCraftRecipe)(recipe, save.inventory),
+        hasMaterials: (0, ContentManager_1.canCraftRecipe)(recipe, save.inventory),
     }));
 }
 // ─── Craft an item ────────────────────────────────────────────────────────────
 function craftItem(save, recipeIndex) {
-    if (recipeIndex < 0 || recipeIndex >= crafting_1.CRAFTING_RECIPES.length) {
+    const recipes = (0, ContentManager_1.getAllRecipes)();
+    const recipeList = Object.values(recipes);
+    if (recipeIndex < 0 || recipeIndex >= recipeList.length) {
         return { text: 'Invalid recipe number. Type "craft" to see available recipes.' };
     }
-    const recipe = crafting_1.CRAFTING_RECIPES[recipeIndex];
+    const recipe = recipeList[recipeIndex];
     if (save.stats.level < recipe.skillLevelRequired) {
         return { text: `You need to be level ${recipe.skillLevelRequired} to craft ${recipe.name}.` };
     }
-    if (!(0, crafting_1.canCraftRecipe)(recipe, save.inventory)) {
+    if (!(0, ContentManager_1.canCraftRecipe)(recipe, save.inventory)) {
         // Show missing materials
         const missing = [];
         for (const mat of recipe.materials) {
-            const have = (0, crafting_1.countMaterialsInInventory)(save.inventory, mat.itemId);
+            const have = (0, ContentManager_1.countMaterialsInInventory)(save.inventory, mat.itemId);
             if (have < mat.qty) {
-                const item = (0, items_1.getItem)(mat.itemId);
+                const item = (0, ContentManager_2.getItem)(mat.itemId);
                 missing.push(`  ${item?.name ?? mat.itemId}: have ${have} / need ${mat.qty}`);
             }
         }
@@ -54,7 +57,7 @@ function craftItem(save, recipeIndex) {
     // Add output item(s)
     const result = (0, InventoryManager_1.inventoryAdd)(s, recipe.outputItemId, recipe.outputQty);
     s = result.save;
-    const item = (0, items_1.getItem)(recipe.outputItemId);
+    const item = (0, ContentManager_2.getItem)(recipe.outputItemId);
     return {
         text: `  ✓ Crafted ${recipe.outputQty}x ${item?.name ?? recipe.outputItemId}!\n  Materials consumed.`,
         newSave: s,
@@ -77,8 +80,8 @@ function formatCraftingMenu(save) {
     lines.push('  ─────────────────────────────────────────');
     for (const { recipe, hasMaterials, index } of items) {
         const matSummary = recipe.materials.map(m => {
-            const have = (0, crafting_1.countMaterialsInInventory)(save.inventory, m.itemId);
-            const item = (0, items_1.getItem)(m.itemId);
+            const have = (0, ContentManager_1.countMaterialsInInventory)(save.inventory, m.itemId);
+            const item = (0, ContentManager_2.getItem)(m.itemId);
             const name = item?.name ?? m.itemId;
             const ok = have >= m.qty;
             return `${ok ? '✓' : '✗'}${name}×${m.qty}`;
@@ -102,7 +105,7 @@ function getNodeUsesRemaining(nodeId, maxUses) {
     return nodeState[nodeId];
 }
 function gatherFromNode(save, areaId, verb) {
-    const nodes = crafting_1.GATHERING_NODES[areaId] ?? [];
+    const nodes = (0, ContentManager_1.getGatheringNodesForArea)(areaId);
     const node = nodes.find(n => n.verb === verb);
     if (!node) {
         return { text: `There is nothing to ${verb} here.` };
@@ -134,7 +137,7 @@ function gatherFromNode(save, areaId, verb) {
         chance = Math.min(1.0, chance + Math.min(0.08, (save.stats.luck / 10) * 0.005));
         if (Math.random() < chance) {
             const qty = entry.qtyMin + Math.floor(Math.random() * (entry.qtyMax - entry.qtyMin + 1));
-            const item = (0, items_1.getItem)(entry.itemId);
+            const item = (0, ContentManager_2.getItem)(entry.itemId);
             if (item) {
                 gathered.push({ itemId: entry.itemId, name: item.name, rarity: item.rarity, quantity: qty });
             }
@@ -181,7 +184,7 @@ function gatherFromNode(save, areaId, verb) {
 }
 // ─── Format area nodes for 'look' display ────────────────────────────────────
 function formatAreaNodes(areaId) {
-    const nodes = crafting_1.GATHERING_NODES[areaId] ?? [];
+    const nodes = (0, ContentManager_1.getGatheringNodesForArea)(areaId);
     if (nodes.length === 0)
         return '';
     const lines = ['  Resource Nodes:'];

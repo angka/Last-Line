@@ -9,8 +9,7 @@ exports.formatLootDrop = formatLootDrop;
 exports.formatLootDrops = formatLootDrops;
 exports.addLootToPending = addLootToPending;
 exports.resolveVictoryWithLoot = resolveVictoryWithLoot;
-const items_1 = require("../../data/items");
-const skills_1 = require("../../data/skills");
+const ContentManager_1 = require("../content/ContentManager");
 // ─── Dungeon Tier by Dungeon ID ────────────────────────────────────────────────
 function getDungeonTier(dungeonId) {
     const tierMap = {
@@ -127,7 +126,7 @@ function rollLootEntry(entry, playerLuck) {
     if (Math.random() > chance)
         return null;
     const qty = entry.qtyMin + Math.floor(Math.random() * (entry.qtyMax - entry.qtyMin + 1));
-    const item = (0, items_1.getItem)(entry.itemId);
+    const item = (0, ContentManager_1.getItem)(entry.itemId);
     if (!item)
         return null;
     return { itemId: entry.itemId, name: item.name, rarity: item.rarity, quantity: qty };
@@ -169,7 +168,7 @@ function rollBossLoot(bossId, playerLuck, defeatedBosses) {
     return drops;
 }
 function rollScrollDrops(dungeonTier, playerLuck) {
-    const scrollIds = (0, skills_1.getScrollDropsForTier)(dungeonTier);
+    const scrollIds = (0, ContentManager_1.getScrollDropsForTier)(dungeonTier);
     const drops = [];
     const baseChance = 0.15;
     const luckBonus = Math.min(0.08, (playerLuck / 10) * 0.005);
@@ -184,7 +183,7 @@ function rollScrollDrops(dungeonTier, playerLuck) {
         if (rolled.has(itemId))
             continue;
         rolled.add(itemId);
-        const item = (0, items_1.getItem)(itemId);
+        const item = (0, ContentManager_1.getItem)(itemId);
         if (item) {
             drops.push({ itemId, name: item.name, rarity: item.rarity, quantity: 1 });
         }
@@ -202,7 +201,7 @@ function rollRegularLoot(playerLuck, enemyLevel) {
     const matChance = 0.10 + Math.min(0.08, (playerLuck / 10) * 0.005);
     if (Math.random() < matChance) {
         const matId = getRandomMaterialForLevel(enemyLevel);
-        const mat = (0, items_1.getItem)(matId);
+        const mat = (0, ContentManager_1.getItem)(matId);
         if (mat) {
             drops.push({ itemId: matId, name: mat.name, rarity: mat.rarity, quantity: 1 });
         }
@@ -269,7 +268,7 @@ function getDungeonChestLoot(dungeonId) {
     const drops = [];
     for (const entry of chestTable) {
         if (Math.random() < entry.chance) {
-            const item = (0, items_1.getItem)(entry.itemId);
+            const item = (0, ContentManager_1.getItem)(entry.itemId);
             if (item) {
                 drops.push({ itemId: entry.itemId, name: item.name, rarity: item.rarity, quantity: entry.qty });
             }
@@ -284,7 +283,7 @@ function getDungeonChestLoot(dungeonId) {
 }
 // ─── Loot Formatting ───────────────────────────────────────────────────────────
 function formatLootDrop(drop) {
-    const item = (0, items_1.getItem)(drop.itemId);
+    const item = (0, ContentManager_1.getItem)(drop.itemId);
     if (drop.itemId === 'gold') {
         return `  + ${drop.quantity}g`;
     }

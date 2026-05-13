@@ -129,6 +129,14 @@ function createDefaultSave(playerName) {
             deepestFloors: {},
             visitedAreas: ['ashford_village_square'],
         },
+        pvpStats: {
+            kills: 0,
+            deaths: 0,
+            winStreak: 0,
+            bestStreak: 0,
+            seasonWins: 0,
+            seasonPoints: 1000, // starting ELO
+        },
     };
 }
 // ─── Combat Stats ───────────────────────────────────────────────────────────────

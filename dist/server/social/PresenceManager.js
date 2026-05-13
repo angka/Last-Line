@@ -26,6 +26,10 @@ class PresenceManager {
     getSession(playerId) {
         return this.sessions.get(playerId);
     }
+    /** Phase 8: iterate all sessions (for leaderboard) */
+    getAllSessions() {
+        return this.sessions;
+    }
     getSessionBySocket(sessionId) {
         const pid = this.socketToPlayer.get(sessionId);
         return pid ? this.sessions.get(pid) : undefined;

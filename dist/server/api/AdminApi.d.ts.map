@@ -1,1 +1,1 @@
-{"version":3,"file":"AdminApi.d.ts","sourceRoot":"","sources":["../../../src/server/api/AdminApi.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AA4OH,wBAAgB,aAAa,IAAI,IAAI,CAgBpC;AAED,wBAAgB,YAAY,IAAI,IAAI,CAGnC"}
+{"version":3,"file":"AdminApi.d.ts","sourceRoot":"","sources":["../../../src/server/api/AdminApi.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAwpBH,wBAAgB,aAAa,IAAI,IAAI,CAgBpC;AAED,wBAAgB,YAAY,IAAI,IAAI,CAGnC"}

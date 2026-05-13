@@ -1,7 +1,7 @@
 /**
- * Phase 7 — REST Admin API
- * Basic Express server for game administration and monitoring.
- * Run separately: `node dist/server/api/AdminApi.js`
+ * Phase 9 — REST Admin API
+ * Express server with JWT auth, player CRUD, ban/unban, PvP toggle, audit log,
+ * rate limiting, and static file serving for the admin browser UI.
  */
 export declare function startAdminApi(): void;
 export declare function stopAdminApi(): void;

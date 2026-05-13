@@ -20,6 +20,8 @@ export interface ParseResult {
         areaId: string;
         enemies: any[];
     };
+    /** Phase 8: achievement unlock notification texts from this command */
+    achievementUnlocks?: string[];
 }
-export declare function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): ParseResult;
+export declare function parseCommand(cmd: string, save: SaveFile, combatState?: any, _sessionId?: string, playerId?: string): Promise<ParseResult>;
 //# sourceMappingURL=CommandParser.d.ts.map

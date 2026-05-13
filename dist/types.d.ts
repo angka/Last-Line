@@ -196,6 +196,15 @@ export interface SaveFile {
         deepestFloors: Record<string, number>;
         visitedAreas: string[];
     };
+    /** Phase 8: PvP leaderboard stats */
+    pvpStats: {
+        kills: number;
+        deaths: number;
+        winStreak: number;
+        bestStreak: number;
+        seasonWins: number;
+        seasonPoints: number;
+    };
 }
 export interface PvPState {
     enabled: boolean;
@@ -428,6 +437,8 @@ export type MenuState = {
 export interface CommandResult {
     text: string;
     clear?: boolean;
+    /** Phase 8: newly unlocked achievements from this command */
+    newlyUnlocked?: string[];
 }
 export type AchievementCategory = 'combat' | 'exploration' | 'social' | 'crafting' | 'collection' | 'pvp' | 'dungeon';
 export interface AchievementDef {

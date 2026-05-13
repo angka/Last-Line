@@ -3,16 +3,30 @@
  * Phase 7 — PvP Combat Manager
  * Handles player-vs-player combat in PvP zones.
  * PvP is enabled when both players are in a non-safe-zone and both have `pvp.enabled = true`.
+ * Phase 9: PvP can also be globally or per-city toggled by admin via PvP settings.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pvpManager = void 0;
 exports.applyPvPDeathPenalty = applyPvPDeathPenalty;
 exports.applyPvPVictoryReward = applyPvPVictoryReward;
+const AdminDbManager_1 = require("../persistence/AdminDbManager");
 const uuid_1 = require("uuid");
 class PvPManager {
     activeSessions = new Map();
+    // ─── Check if PvP is allowed in an area (admin toggle + safe zone) ───────────
+    async isPvPAllowedInArea(areaId) {
+        // Check global admin PvP setting
+        const global = await (0, AdminDbManager_1.getPvPSettings)('global');
+        if (!global.enabled)
+            return false;
+        // Check per-city override
+        const citySetting = await (0, AdminDbManager_1.getPvPSettings)(areaId);
+        if (!citySetting.enabled)
+            return false;
+        return true;
+    }
     // ─── Start PvP combat ────────────────────────────────────────────────────
-    startPvPCombat(attackerId, attackerSave, defenderId, defenderSave, areaId) {
+    async startPvPCombat(attackerId, attackerSave, defenderId, defenderSave, areaId) {
         // Both must have PvP enabled and be in a non-safe zone
         if (attackerSave.pvp.safeZone || !attackerSave.pvp.enabled)
             return null;
@@ -20,6 +34,10 @@ class PvPManager {
             return null;
         // Can't fight yourself
         if (attackerId === defenderId)
+            return null;
+        // Phase 9: Check admin PvP setting for this area
+        const allowed = await this.isPvPAllowedInArea(areaId);
+        if (!allowed)
             return null;
         const participants = [
             {
@@ -244,7 +262,12 @@ function applyPvPDeathPenalty(save) {
         hp: save.stats.maxHp,
         mana: Math.floor(save.stats.maxMana * 0.5),
     };
-    return { ...save, stats: newStats };
+    const pvpStats = save.pvpStats ?? { kills: 0, deaths: 0, winStreak: 0, bestStreak: 0, seasonWins: 0, seasonPoints: 1000 };
+    return {
+        ...save,
+        stats: newStats,
+        pvpStats: { ...pvpStats, deaths: pvpStats.deaths + 1, winStreak: 0 },
+    };
 }
 // ─── Apply PvP victory reward ─────────────────────────────────────────────────
 function applyPvPVictoryReward(save, defeatedSave) {
@@ -255,7 +278,23 @@ function applyPvPVictoryReward(save, defeatedSave) {
         gold: save.stats.gold + goldPlunder,
         exp: save.stats.exp + expGain,
     };
-    let newSave = { ...save, stats: newStats };
+    // ELO-like point gain: winner gains 20 pts, loser loses 15
+    const winnerPts = save.pvpStats?.seasonPoints ?? 1000;
+    const loserPts = defeatedSave.pvpStats?.seasonPoints ?? 1000;
+    const winnerBest = Math.max(save.pvpStats?.bestStreak ?? 0, (save.pvpStats?.winStreak ?? 0) + 1);
+    const pvpStats = save.pvpStats ?? { kills: 0, deaths: 0, winStreak: 0, bestStreak: 0, seasonWins: 0, seasonPoints: 1000 };
+    let newSave = {
+        ...save,
+        stats: newStats,
+        pvpStats: {
+            ...pvpStats,
+            kills: pvpStats.kills + 1,
+            winStreak: pvpStats.winStreak + 1,
+            bestStreak: winnerBest,
+            seasonWins: pvpStats.seasonWins + 1,
+            seasonPoints: Math.max(100, winnerPts + 20),
+        },
+    };
     // Check level up
     const { checkLevelUp, applyLevelUp } = require('../engine/PlayerEngine');
     const { leveledUp, updatedSave } = checkLevelUp(newSave);

@@ -1,25 +1,80 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseCommand = parseCommand;
-const areas_1 = require("../../data/areas");
+const ContentManager_1 = require("../content/ContentManager");
 const InventoryManager_1 = require("../items/InventoryManager");
-const items_1 = require("../../data/items");
 const RegenEngine_1 = require("../engine/RegenEngine");
 const CombatEngine_1 = require("../engine/CombatEngine");
-const shops_1 = require("../../data/shops");
-const skills_1 = require("../../data/skills");
-const crafting_1 = require("../../data/crafting");
 const CraftingManager_1 = require("../engine/CraftingManager");
 const LootEngine_1 = require("../engine/LootEngine");
-const dungeons_1 = require("../../data/dungeons");
 const CombatEngine_2 = require("../engine/CombatEngine");
 const PresenceManager_1 = require("../social/PresenceManager");
 const PartyManager_1 = require("../social/PartyManager");
+const LeaderboardManager_1 = require("../social/LeaderboardManager");
 const TradeManager_1 = require("../social/TradeManager");
 const PartyCombatManager_1 = require("../engine/PartyCombatManager");
 const AchievementEngine_1 = require("../engine/AchievementEngine");
+// ─── Helper: wire achievement stats into any save update ────────────────────────
+function withAchievements(result, save, updates) {
+    const { save: newSave, newlyUnlocked } = (0, AchievementEngine_1.processAchievementStats)(save, updates);
+    const notification = (0, AchievementEngine_1.formatAchievementUnlockBatch)(newlyUnlocked);
+    return {
+        ...result,
+        newSave,
+        achievementUnlocks: notification ? [notification] : [],
+        text: result.text + (notification ? '\n' + notification : ''),
+    };
+}
+// ─── Helper: apply skill combat achievements ────────────────────────────────────
+function applySkillAchievements(skillResult, originalCombatState) {
+    if (!skillResult.session.winner) {
+        return { text: skillResult.text, newSave: skillResult.newSave, combatState: skillResult.session };
+    }
+    const enemiesKilled = skillResult.session.participants.filter((p) => p.type === 'enemy' && p.hp <= 0);
+    const bossKills = enemiesKilled.filter((e) => e.isBoss).length;
+    const dungeonInfo = (0, ContentManager_1.getDungeonForArea)(originalCombatState.areaId);
+    return withAchievements({ text: skillResult.text, newSave: skillResult.newSave, combatState: undefined }, skillResult.newSave, {
+        totalKills: enemiesKilled.length,
+        bossKills,
+        dungeonClear: bossKills > 0 && dungeonInfo ? dungeonInfo.id : undefined,
+    });
+}
+// ─── Movement ──────────────────────────────────────────────────────────
 const WorldBossEngine_1 = require("../engine/WorldBossEngine");
-function parseCommand(cmd, save, combatState, _sessionId, playerId) {
+async function parseCommand(cmd, save, combatState, _sessionId, playerId) {
     const parts = cmd.trim().split(/\s+/);
     const verb = parts[0]?.toLowerCase();
     const args = parts.slice(1);
@@ -42,7 +97,7 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
     switch (verb) {
         case 'look':
         case 'l': {
-            const areaDesc = (0, areas_1.describeArea)(save.worldState.currentArea);
+            const areaDesc = (0, ContentManager_1.describeArea)(save.worldState.currentArea);
             const areaNodes = (0, CraftingManager_1.formatAreaNodes)(save.worldState.currentArea);
             const hpPct = Math.round((save.stats.hp / save.stats.maxHp) * 100);
             const mpPct = Math.round((save.stats.mana / save.stats.maxMana) * 100);
@@ -55,7 +110,7 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
             const dir = args[0]?.toLowerCase();
             if (!dir)
                 return { text: 'Go where? Usage: go <north|south|east|west>' };
-            return handleMove(dir, save);
+            return await handleMove(dir, save);
         }
         case 'stats': {
             const s = save.stats;
@@ -72,9 +127,16 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
             if (page === -1 || page >= unequipped.length)
                 return { text: 'Invalid slot number.' };
             const item = unequipped[page];
+            const itemDef = (0, ContentManager_1.getItem)(item.itemId);
             const newSave = (0, InventoryManager_1.inventoryEquip)(save, item.slotId);
+            const rarity = itemDef?.rarity;
+            // Check legendary/mythic equip achievements
+            if (rarity === 'legendary' || rarity === 'mythic') {
+                const result = withAchievements({ text: `You equipped ${itemDef?.name ?? item.itemId}.`, newSave }, newSave, { itemEquippedRarity: rarity });
+                return result;
+            }
             return {
-                text: `You equipped ${(0, items_1.getItem)(item.itemId)?.name ?? item.itemId}.`,
+                text: `You equipped ${itemDef?.name ?? item.itemId}.`,
                 newSave,
             };
         }
@@ -91,7 +153,7 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
                 return { text: 'Invalid slot number.' };
             const item = unequipped[page];
             const newSave = (0, InventoryManager_1.inventoryUse)(save, item.slotId);
-            const used = (0, items_1.getItem)(item.itemId);
+            const used = (0, ContentManager_1.getItem)(item.itemId);
             return {
                 text: `You used ${used?.name ?? item.itemId}. HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}`,
                 newSave,
@@ -104,7 +166,7 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
                 return { text: 'Invalid slot number.' };
             const item = unequipped[page];
             const newSave = (0, InventoryManager_1.inventoryRemove)(save, item.slotId);
-            return { text: `You dropped ${(0, items_1.getItem)(item.itemId)?.name ?? item.itemId}.`, newSave };
+            return { text: `You dropped ${(0, ContentManager_1.getItem)(item.itemId)?.name ?? item.itemId}.`, newSave };
         }
         case 'skills': {
             return { text: formatSkills(save) };
@@ -113,7 +175,7 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
             return { text: `Gold: ${save.stats.gold}g` };
         }
         case 'rest': {
-            const area = (0, areas_1.getArea)(save.worldState.currentArea);
+            const area = (0, ContentManager_1.getArea)(save.worldState.currentArea);
             if (area && area.safeZone) {
                 const newSave = { ...save, regenState: 'safe_area' };
                 return {
@@ -274,14 +336,30 @@ function parseCommand(cmd, save, combatState, _sessionId, playerId) {
         case 'worldboss': {
             return handleWorldBoss(args, save);
         }
+        // ── Phase 8: PvP Leaderboard ───────────────────────────────────────────────
+        case 'leaderboard': {
+            return handleLeaderboard(args, save);
+        }
+        case 'rank': {
+            return handleRank(save);
+        }
+        // ── Phase 10: Friends ──────────────────────────────────────────────────
+        case 'friend':
+        case 'friends': {
+            return handleFriend(args, save);
+        }
+        // ── Phase 10: Block ───────────────────────────────────────────────────
+        case 'block': {
+            return handleBlock(args, save);
+        }
         default: {
             return { text: `Unknown command: "${verb}". Type 'help' for a list of commands.` };
         }
     }
 }
 // ─── Movement ──────────────────────────────────────────────────────────
-function handleMove(dir, save) {
-    const area = (0, areas_1.getArea)(save.worldState.currentArea);
+async function handleMove(dir, save) {
+    const area = (0, ContentManager_1.getArea)(save.worldState.currentArea);
     if (!area)
         return { text: 'Unknown area.' };
     const targetId = area.exits[dir];
@@ -289,7 +367,20 @@ function handleMove(dir, save) {
         const validDirs = Object.keys(area.exits).join(', ');
         return { text: `Cannot go "${dir}". Available exits: ${validDirs}` };
     }
-    const target = (0, areas_1.getArea)(targetId);
+    const target = (0, ContentManager_1.getArea)(targetId);
+    // Phase 11: DLC entitlement check
+    const dlcAreas = {
+        'deep_forest': 'dlc_forest',
+        'cave_entrance': 'dlc_cave',
+    };
+    const requiredDlc = dlcAreas[targetId];
+    if (requiredDlc) {
+        const { hasDlcEntitlement } = await Promise.resolve().then(() => __importStar(require('../persistence/CosmeticDbManager')));
+        const hasAccess = await hasDlcEntitlement(save.playerId, requiredDlc);
+        if (!hasAccess) {
+            return { text: `🔒 This area requires the ${requiredDlc} expansion. Visit the cosmetic store to purchase.` };
+        }
+    }
     // Auto-unlock city on first visit
     const isCity = target?.regenState === 'city';
     const alreadyUnlockedCity = save.worldState.unlockedCities.includes(targetId);
@@ -297,7 +388,7 @@ function handleMove(dir, save) {
         ? [...save.worldState.unlockedCities, targetId]
         : save.worldState.unlockedCities;
     // Auto-unlock dungeon on first visit
-    const dungeonInfo = (0, dungeons_1.getDungeonForArea)(targetId);
+    const dungeonInfo = (0, ContentManager_1.getDungeonForArea)(targetId);
     const dungeonId = dungeonInfo?.id ?? '';
     const alreadyUnlockedDungeon = save.worldState.unlockedDungeons.includes(dungeonId);
     const newUnlockedDungeons = (!alreadyUnlockedDungeon && dungeonId)
@@ -330,7 +421,7 @@ function handleMove(dir, save) {
                         PartyManager_1.partyManager.getPartyOf(p.playerId)?.partyId === save.partyId);
                     if (partyMembers.length >= 2) {
                         return {
-                            text: `${(0, areas_1.describeArea)(targetId)}\n\n  ⚔ PARTY COMBAT — ${enemies.length} enemies appear!\n  All co-located party members enter combat together.\n  Use "attack <n>", "skill <t> <n>", "magic <n>", "heal <ally>", "buff <ally>", "flee", "log".`,
+                            text: `${(0, ContentManager_1.describeArea)(targetId)}\n\n  ⚔ PARTY COMBAT — ${enemies.length} enemies appear!\n  All co-located party members enter combat together.\n  Use "attack <n>", "skill <t> <n>", "magic <n>", "heal <ally>", "buff <ally>", "flee", "log".`,
                             newSave,
                             action: 'party_encounter',
                             pushMessages: [
@@ -339,32 +430,34 @@ function handleMove(dir, save) {
                                 { channel: 'area', areaId: targetId, text: `[Combat] ⚔ ${save.stats.name} triggered party combat!`, excludeSelf: false },
                             ],
                             partyEncounter: { partyId: save.partyId, areaId: targetId, enemies },
+                            // Phase 8: track area visit
+                            achievementUnlocks: [],
                         };
                     }
                 }
                 const session = (0, CombatEngine_1.createCombatSession)(newSave, enemies, targetId);
-                return {
-                    text: `${(0, areas_1.describeArea)(targetId)}\n\n  ENCOUNTER! ${enemies.map(e => e.name).join(', ')} blocks your path!\n${(0, CombatEngine_1.formatCombatState)(session)}\n${(0, CombatEngine_1.formatCombatPrompt)(session, newSave.stats.hp, newSave.stats.maxHp, newSave.stats.mana, newSave.stats.maxMana)}`,
+                return withAchievements({
+                    text: `${(0, ContentManager_1.describeArea)(targetId)}\n\n  ENCOUNTER! ${enemies.map(e => e.name).join(', ')} blocks your path!\n${(0, CombatEngine_1.formatCombatState)(session)}\n${(0, CombatEngine_1.formatCombatPrompt)(session, newSave.stats.hp, newSave.stats.maxHp, newSave.stats.mana, newSave.stats.maxMana)}`,
                     newSave,
                     combatState: session,
-                };
+                }, newSave, { areaVisited: targetId });
             }
         }
     }
-    const dungeonInfo2 = (0, dungeons_1.getDungeonFloor)(targetId);
+    const dungeonInfo2 = (0, ContentManager_1.getDungeonFloor)(targetId);
     const floorNote = dungeonInfo2
         ? `\n  [Dungeon: ${dungeonInfo2.dungeon.name} — Floor ${dungeonInfo2.floor}/${dungeonInfo2.dungeon.floors.length}]`
         : '';
-    return {
-        text: (0, areas_1.describeArea)(targetId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${(0, RegenEngine_1.regenStateLabel)(newSave.regenState)}]${floorNote}${unlockMsg}`,
+    const baseResult = {
+        text: (0, ContentManager_1.describeArea)(targetId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${(0, RegenEngine_1.regenStateLabel)(newSave.regenState)}]${floorNote}${unlockMsg}`,
         newSave,
         pushMessages: [
-            // Departure from old area (client hasn't switched areas yet)
             { channel: 'departure', areaId: save.worldState.currentArea, text: `[Nearby] ${save.stats.name} has left.`, excludeSelf: true },
-            // Arrival in new area
             { channel: 'arrival', areaId: targetId, text: `[Nearby] ${save.stats.name} has entered the area.`, excludeSelf: false },
         ],
     };
+    // Phase 8: track area visit achievement
+    return withAchievements(baseResult, newSave, { areaVisited: targetId });
 }
 // ─── Combat ───────────────────────────────────────────────────────────────
 function handleAttack(args, save, combatState) {
@@ -379,11 +472,22 @@ function handleAttack(args, save, combatState) {
     let result;
     if (session.winner === 'player') {
         const newSave = (0, CombatEngine_1.resolveVictory)(save, session);
+        // Wire achievements: count kills
+        const enemiesKilled = session.participants.filter((p) => p.type === 'enemy' && p.hp <= 0);
+        const bossKills = enemiesKilled.filter((e) => e.isBoss).length;
+        // Dungeon clear: if boss killed in a dungeon
+        const dungeonInfo = (0, ContentManager_1.getDungeonForArea)(combatState.areaId);
         result = {
             text: `${(0, CombatEngine_1.formatCombatState)(session)}\n\n  Victory!`,
             newSave,
             combatState: undefined,
         };
+        result = withAchievements(result, newSave, {
+            totalKills: enemiesKilled.length,
+            bossKills: bossKills,
+            dungeonClear: bossKills > 0 && dungeonInfo ? dungeonInfo.id : undefined,
+            dungeonFloorReached: dungeonInfo ? { dungeonId: dungeonInfo.id, floor: (0, ContentManager_1.getDungeonFloor)(combatState.areaId)?.floor ?? 1 } : undefined,
+        });
     }
     else if (session.winner === 'enemy') {
         const newSave = (0, CombatEngine_1.resolveDefeat)(save);
@@ -459,7 +563,7 @@ function handleCombatItem(args, save, combatState) {
 // ─── Travel ─────────────────────────────────────────────────────────────
 function handleTravel(cityName, save) {
     if (!cityName) {
-        const unlocked = areas_1.CITIES.filter(c => save.worldState.unlockedCities.includes(c.id));
+        const unlocked = (0, ContentManager_1.getAllCities)().filter(c => save.worldState.unlockedCities.includes(c.id));
         if (unlocked.length === 0) {
             return { text: 'No cities unlocked yet. Explore to discover new cities.' };
         }
@@ -472,7 +576,7 @@ function handleTravel(cityName, save) {
         }
         return { text: lines.join('\n') };
     }
-    const target = areas_1.CITIES.find(c => c.name.toLowerCase() === cityName.toLowerCase() ||
+    const target = (0, ContentManager_1.getAllCities)().find(c => c.name.toLowerCase() === cityName.toLowerCase() ||
         c.id === cityName.toLowerCase());
     if (!target) {
         return { text: `Unknown city "${cityName}". Type 'travel' to see unlocked cities.` };
@@ -491,30 +595,30 @@ function handleTravel(cityName, save) {
         pvp: { ...save.pvp, safeZone: true },
     };
     return {
-        text: `  You arrive at ${target.name}.\n\n${(0, areas_1.describeArea)(target.id)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [city — fast regen]`,
+        text: `  You arrive at ${target.name}.\n\n${(0, ContentManager_1.describeArea)(target.id)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [city — fast regen]`,
         newSave,
     };
 }
 // ─── Shop ────────────────────────────────────────────────────────────────
 function handleShop(save) {
     const cityId = save.worldState.currentCity || save.worldState.currentArea;
-    const catalog = (0, shops_1.getShopCatalog)(cityId);
+    const catalog = (0, ContentManager_1.getShopCatalog)(cityId);
     if (!catalog) {
         return { text: 'There is no shop here.' };
     }
     const lines = ['  ═══════════════ CITY SHOP ═══════════════'];
-    lines.push(`  ${(0, areas_1.getArea)(cityId)?.name ?? cityId} General Store`);
+    lines.push(`  ${(0, ContentManager_1.getArea)(cityId)?.name ?? cityId} General Store`);
     lines.push('  ─────────────────────────────────────────────');
     lines.push(`  Your gold: ${save.stats.gold}g`);
     lines.push('  ─────────────────────────────────────────────');
     lines.push('  [N]  Item                           Price');
     lines.push('  ─────────────────────────────────────────────');
     catalog.items.forEach((itemId, idx) => {
-        const item = (0, items_1.getItem)(itemId);
+        const item = (0, ContentManager_1.getItem)(itemId);
         if (!item)
             return;
-        const col = (0, items_1.rarityColor)(item.rarity);
-        const r = items_1.RARITY_RESET;
+        const col = (0, ContentManager_1.rarityColor)(item.rarity);
+        const r = ContentManager_1.RARITY_RESET;
         const price = Math.round(item.buyPrice * 1.1); // 10% markup
         lines.push(`  [${String(idx + 1).padStart(2)}]  ${col}${item.name}${r.padEnd(30 - item.name.length)} ${price}g`);
     });
@@ -524,7 +628,7 @@ function handleShop(save) {
 }
 function handleBuy(rawIdx, save) {
     const cityId = save.worldState.currentCity || save.worldState.currentArea;
-    const catalog = (0, shops_1.getShopCatalog)(cityId);
+    const catalog = (0, ContentManager_1.getShopCatalog)(cityId);
     if (!catalog)
         return { text: 'There is no shop here.' };
     if (!rawIdx)
@@ -534,7 +638,7 @@ function handleBuy(rawIdx, save) {
         return { text: `Invalid selection. Type "shop" to see available items.` };
     }
     const itemId = catalog.items[idx];
-    const item = (0, items_1.getItem)(itemId);
+    const item = (0, ContentManager_1.getItem)(itemId);
     if (!item)
         return { text: 'Item not found.' };
     const price = Math.round(item.buyPrice * 1.1);
@@ -549,7 +653,7 @@ function handleBuy(rawIdx, save) {
 }
 function handleSell(rawIdx, save) {
     const cityId = save.worldState.currentCity || save.worldState.currentArea;
-    if (!(0, shops_1.getShopCatalog)(cityId))
+    if (!(0, ContentManager_1.getShopCatalog)(cityId))
         return { text: 'There is no shop here to sell to.' };
     if (!rawIdx)
         return { text: 'Usage: sell <inventory-slot>  — type "inv" to see your items.' };
@@ -559,7 +663,7 @@ function handleSell(rawIdx, save) {
         return { text: `Invalid slot. Type "inv" to see your inventory.` };
     }
     const slot = unequipped[idx];
-    const item = (0, items_1.getItem)(slot.itemId);
+    const item = (0, ContentManager_1.getItem)(slot.itemId);
     if (!item)
         return { text: 'Item not found.' };
     const sellPrice = item.sellPrice;
@@ -601,7 +705,7 @@ function innTierForCity(cityId) {
 }
 function handleInn(save) {
     const cityId = save.worldState.currentCity || save.worldState.currentArea;
-    const area = (0, areas_1.getArea)(cityId);
+    const area = (0, ContentManager_1.getArea)(cityId);
     if (!area?.safeZone || area.regenState !== 'city') {
         return { text: 'There is no inn here. Find a city to rest.' };
     }
@@ -628,10 +732,10 @@ function handleInn(save) {
 // ─── Dungeon Navigation ───────────────────────────────────────────────────
 function handleDungeonUp(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    if (!(0, ContentManager_1.isDungeonArea)(areaId) && !(0, ContentManager_1.isInfiniteFloor)(areaId)) {
         return { text: 'You are not in a dungeon.' };
     }
-    const prevAreaId = (0, dungeons_1.getPrevFloorArea)(areaId);
+    const prevAreaId = (0, ContentManager_1.getPrevFloorArea2)(areaId);
     if (!prevAreaId) {
         return { text: 'You are already at the dungeon entrance. Use "leave" to exit.' };
     }
@@ -639,10 +743,10 @@ function handleDungeonUp(save) {
 }
 function handleDungeonDown(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    if (!(0, ContentManager_1.isDungeonArea)(areaId) && !(0, ContentManager_1.isInfiniteFloor)(areaId)) {
         return { text: 'You are not in a dungeon.' };
     }
-    const nextAreaId = (0, dungeons_1.getNextFloorArea)(areaId);
+    const nextAreaId = (0, ContentManager_1.getNextFloorArea2)(areaId);
     if (!nextAreaId) {
         return { text: 'You are at the deepest floor. Prepare for the boss!' };
     }
@@ -650,14 +754,34 @@ function handleDungeonDown(save) {
 }
 function handleDungeonLeave(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    // Infinite floor — exit back to last normal floor
+    if ((0, ContentManager_1.isInfiniteFloor)(areaId)) {
+        const info = (0, ContentManager_1.getInfiniteFloorInfo)(areaId);
+        const lastFloorIdx = info.dungeon.floors.length - 1;
+        const lastFloor = info.dungeon.floors[lastFloorIdx];
+        const entrance = (0, ContentManager_1.getArea)(info.dungeon.entrance);
+        const newSave = {
+            ...save,
+            worldState: {
+                ...save.worldState,
+                currentArea: lastFloor.areaId,
+                currentCity: save.worldState.currentCity,
+            },
+            regenState: 'exploring',
+        };
+        return {
+            text: `  You retreat from the infinite depths of ${info.dungeon.name}...\n\n${(0, ContentManager_1.describeArea)(lastFloor.areaId)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [Exploring]`,
+            newSave,
+        };
+    }
+    if (!(0, ContentManager_1.isDungeonArea)(areaId)) {
         return { text: 'You are not in a dungeon.' };
     }
-    const info = (0, dungeons_1.getDungeonFloor)(areaId);
+    const info = (0, ContentManager_1.getDungeonFloor)(areaId);
     if (!info)
         return { text: 'Unknown dungeon.' };
     const entrance = info.dungeon.entrance;
-    const entranceArea = (0, areas_1.getArea)(entrance);
+    const entranceArea = (0, ContentManager_1.getArea)(entrance);
     const newSave = {
         ...save,
         worldState: {
@@ -668,21 +792,37 @@ function handleDungeonLeave(save) {
         regenState: entranceArea?.safeZone ? 'city' : 'exploring',
     };
     return {
-        text: `  You leave the ${info.dungeon.name} and return to ${entranceArea?.name ?? entrance}.\n\n${(0, areas_1.describeArea)(entrance)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g`,
+        text: `  You leave the ${info.dungeon.name} and return to ${entranceArea?.name ?? entrance}.\n\n${(0, ContentManager_1.describeArea)(entrance)}\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g`,
         newSave,
     };
 }
 function handleDungeonExplore(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    // Infinite floor — generate scaled enemies
+    if ((0, ContentManager_1.isInfiniteFloor)(areaId)) {
+        const info = (0, ContentManager_1.getInfiniteFloorInfo)(areaId);
+        const depth = info.infiniteFloor - info.dungeon.floors.length;
+        const level = Math.min(99, 30 + depth * 3);
+        const eliteChance = Math.min(0.90, 0.40 + depth * 0.05);
+        const enemies = (0, CombatEngine_1.generateEncounter)([level, level + 3], save.stats.level, 2, 4, eliteChance);
+        if (enemies.length === 0) {
+            return { text: `Deep Floor ${info.infiniteFloor} of ${info.dungeon.name}\n\n  You search the area but find nothing this time.` };
+        }
+        const session = (0, CombatEngine_1.createCombatSession)(save, enemies, areaId);
+        return {
+            text: `Deep Floor ${info.infiniteFloor} of ${info.dungeon.name}\n\n  You explore the infinite depths... ENCOUNTER! ${enemies.map(e => e.name).join(', ')}!\n${(0, CombatEngine_1.formatCombatState)(session)}\n${(0, CombatEngine_1.formatCombatPrompt)(session, save.stats.hp, save.stats.maxHp, save.stats.mana, save.stats.maxMana)}`,
+            combatState: session,
+        };
+    }
+    if (!(0, ContentManager_1.isDungeonArea)(areaId)) {
         return { text: 'You are not in a dungeon. Explore the wilderness with "go <dir>".' };
     }
-    const area = (0, areas_1.getArea)(areaId);
+    const area = (0, ContentManager_1.getArea)(areaId);
     if (!area || area.baseEncounterChance === 0) {
         return { text: 'Nothing to explore here.' };
     }
     // Check if this is a boss floor
-    const dungeonInfo2 = (0, dungeons_1.getDungeonFloor)(areaId);
+    const dungeonInfo2 = (0, ContentManager_1.getDungeonFloor)(areaId);
     const isBossFloor = dungeonInfo2 ? dungeonInfo2.dungeon.floors[dungeonInfo2.floor - 1]?.bossFloor : false;
     if (isBossFloor && dungeonInfo2) {
         const boss = (0, CombatEngine_2.generateBossEncounter)(dungeonInfo2.dungeon.bossId);
@@ -709,10 +849,21 @@ function handleDungeonExplore(save) {
 }
 function handleDungeonStatus(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    if (!(0, ContentManager_1.isDungeonArea)(areaId) && !(0, ContentManager_1.isInfiniteFloor)(areaId)) {
         return { text: 'You are not in a dungeon.' };
     }
-    const info = (0, dungeons_1.getDungeonFloor)(areaId);
+    // Infinite floor
+    if ((0, ContentManager_1.isInfiniteFloor)(areaId)) {
+        const info = (0, ContentManager_1.getInfiniteFloorInfo)(areaId);
+        const { dungeon, infiniteFloor } = info;
+        const depth = infiniteFloor - dungeon.floors.length;
+        const tier = depth <= 2 ? 'Challenging' : depth <= 5 ? 'Perilous' : depth <= 10 ? 'Nightmarish' : 'Abyssal';
+        const level = Math.min(99, 30 + depth * 3);
+        return {
+            text: `  ═══════════ DUNGEON STATUS ═══════════\n  ${dungeon.name}\n  Floor: ${infiniteFloor} (Infinite — ${tier})\n  Difficulty Level: ${level}+\n  ─────────────────────────────────────\n  Type "up" to go back toward entrance.\n  Type "down" to descend deeper (max 50).\n  Type "explore" to seek enemies on this floor.\n  Type "leave" to exit the dungeon.`,
+        };
+    }
+    const info = (0, ContentManager_1.getDungeonFloor)(areaId);
     if (!info)
         return { text: 'Unknown dungeon.' };
     const { dungeon, floor } = info;
@@ -723,11 +874,38 @@ function handleDungeonStatus(save) {
     };
 }
 function moveInDungeon(save, targetAreaId, direction) {
-    const target = (0, areas_1.getArea)(targetAreaId);
+    // Infinite floor entry — uses describeInfiniteFloor
+    if ((0, ContentManager_1.isInfiniteFloor)(targetAreaId)) {
+        const info = (0, ContentManager_1.getInfiniteFloorInfo)(targetAreaId);
+        const depth = info.infiniteFloor - info.dungeon.floors.length;
+        const level = Math.min(99, 30 + depth * 3);
+        const newSave = {
+            ...save,
+            worldState: {
+                ...save.worldState,
+                currentArea: targetAreaId,
+                unlockedDungeons: save.worldState.unlockedDungeons.includes(info.dungeon.id)
+                    ? save.worldState.unlockedDungeons
+                    : [...save.worldState.unlockedDungeons, info.dungeon.id],
+            },
+            regenState: 'exploring',
+        };
+        const areaDesc = (0, ContentManager_1.describeInfiniteFloor)(info.dungeon, info.infiniteFloor);
+        const levelTag = `  Enemy Level: ${level}+  |  Difficulty: ${depth <= 2 ? 'Challenging' : depth <= 5 ? 'Perilous' : depth <= 10 ? 'Nightmarish' : 'Abyssal'}`;
+        let result = {
+            text: areaDesc + '\n' + levelTag + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [Exploring]`,
+            newSave,
+        };
+        result = withAchievements(result, newSave, {
+            dungeonFloorReached: { dungeonId: info.dungeon.id, floor: info.infiniteFloor },
+        });
+        return result;
+    }
+    const target = (0, ContentManager_1.getArea)(targetAreaId);
     if (!target)
         return { text: 'Cannot move there.' };
     // Unlock dungeon on first visit
-    const dungeonInfo = (0, dungeons_1.getDungeonForArea)(targetAreaId);
+    const dungeonInfo = (0, ContentManager_1.getDungeonForArea)(targetAreaId);
     const dungeonId = dungeonInfo?.id ?? '';
     const alreadyUnlocked = save.worldState.unlockedDungeons.includes(dungeonId);
     const newUnlockedDungeons = alreadyUnlocked
@@ -742,14 +920,21 @@ function moveInDungeon(save, targetAreaId, direction) {
         },
         regenState: target.safeZone ? 'city' : 'exploring',
     };
-    const dungeonInfo2 = (0, dungeons_1.getDungeonFloor)(targetAreaId);
-    const floorNote = dungeonInfo2
+    const dungeonInfo2 = (0, ContentManager_1.getDungeonFloor)(targetAreaId);
+    let floorNote = dungeonInfo2
         ? `  [Dungeon: ${dungeonInfo2.dungeon.name} — Floor ${dungeonInfo2.floor}/${dungeonInfo2.dungeon.floors.length}]`
         : '';
-    return {
-        text: (0, areas_1.describeArea)(targetAreaId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${(0, RegenEngine_1.regenStateLabel)(newSave.regenState)}]\n${floorNote}`,
+    // Track deepest floor reached (achievement)
+    let result = {
+        text: (0, ContentManager_1.describeArea)(targetAreaId) + `\n\n  HP: ${newSave.stats.hp}/${newSave.stats.maxHp}  |  MP: ${newSave.stats.mana}/${newSave.stats.maxMana}  |  Gold: ${newSave.stats.gold}g\n  [${(0, RegenEngine_1.regenStateLabel)(newSave.regenState)}]\n${floorNote}`,
         newSave,
     };
+    if (dungeonInfo2) {
+        result = withAchievements(result, newSave, {
+            dungeonFloorReached: { dungeonId: dungeonInfo2.dungeon.id, floor: dungeonInfo2.floor },
+        });
+    }
+    return result;
 }
 // ─── Helpers ────────────────────────────────────────────────────────────
 function parseInventoryPageIndex(raw, save) {
@@ -782,7 +967,7 @@ function formatStats(s) {
 function formatMap(save) {
     return `
   ══════════════════════════════════════════════════════════════════════
-   WORLD MAP  [${(0, areas_1.getArea)(save.worldState.currentArea)?.name ?? 'Unknown'}]
+   WORLD MAP  [${(0, ContentManager_1.getArea)(save.worldState.currentArea)?.name ?? 'Unknown'}]
   ══════════════════════════════════════════════════════════════════════
   DUNGEONS (enter via go <dir> from nearby areas):
     Goblin Warren F3    north of Ashford       | Thornwick Ruins F3  east of Thornwick
@@ -898,6 +1083,12 @@ function formatHelp() {
     worldboss             — check active world boss
     worldboss status      — active boss status and HP
     worldboss join        — travel to the active world boss location
+    worldboss attack      — attack the active world boss (at boss location)
+    worldboss flee        — flee from the world boss fight
+
+  PvP LEADERBOARD
+    leaderboard           — view top 10 PvP players by ELO rating
+    rank                  — see your personal PvP rank and stats
 
   SYSTEM
     save                    — save game (at Inn)
@@ -920,36 +1111,36 @@ function handleCombatSkill(args, save, combatState) {
             return { text: 'Invalid skill number. Type "skills" to see your physical skills.' };
         }
         const skill = save.skills.physical[idx];
-        const manaCost = (0, skills_1.getSkillManaCost)(skill.level, skill.manaCost);
+        const manaCost = (0, ContentManager_1.getSkillManaCost)(skill.level, skill.manaCost);
         if (save.stats.mana < manaCost) {
             return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
         }
         const result = (0, CombatEngine_1.playerSkill)(combatState, 'physical', idx, save);
-        return { text: result.text, newSave: result.newSave, combatState: result.session };
+        return applySkillAchievements(result, combatState);
     }
     if (skillType === 'magic' || skillType === 'mag') {
         if (idx < 0 || idx >= save.skills.magic.length) {
             return { text: 'Invalid magic number. Type "skills" to see your magic skills.' };
         }
         const skill = save.skills.magic[idx];
-        const manaCost = (0, skills_1.getSkillManaCost)(skill.level, skill.manaCost);
+        const manaCost = (0, ContentManager_1.getSkillManaCost)(skill.level, skill.manaCost);
         if (save.stats.mana < manaCost) {
             return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
         }
         const result = (0, CombatEngine_1.playerSkill)(combatState, 'magic', idx, save);
-        return { text: result.text, newSave: result.newSave, combatState: result.session };
+        return applySkillAchievements(result, combatState);
     }
     if (skillType === 'support' || skillType === 'sup') {
         if (idx < 0 || idx >= save.skills.support.length) {
             return { text: 'Invalid support skill number.' };
         }
         const skill = save.skills.support[idx];
-        const manaCost = (0, skills_1.getSkillManaCost)(skill.level, skill.manaCost);
+        const manaCost = (0, ContentManager_1.getSkillManaCost)(skill.level, skill.manaCost);
         if (save.stats.mana < manaCost) {
             return { text: `Not enough mana. ${skill.name} costs ${manaCost} MP.` };
         }
         const result = (0, CombatEngine_1.playerSkill)(combatState, 'support', idx, save);
-        return { text: result.text, newSave: result.newSave, combatState: result.session };
+        return applySkillAchievements(result, combatState);
     }
     return { text: 'Usage: skill physical/magic/support <n>' };
 }
@@ -958,7 +1149,7 @@ function handleLearn(args, save) {
     const raw = args[0];
     if (!raw) {
         const scrolls = save.inventory.filter(slot => {
-            const item = (0, items_1.getItem)(slot.itemId);
+            const item = (0, ContentManager_1.getItem)(slot.itemId);
             return item?.type === 'scroll';
         });
         if (scrolls.length === 0) {
@@ -966,7 +1157,7 @@ function handleLearn(args, save) {
         }
         const lines = ['  ══════════ SKILL SCROLLS ══════════', '  Scrolls in inventory (use "learn <n>"):'];
         scrolls.forEach((slot, i) => {
-            const item = (0, items_1.getItem)(slot.itemId);
+            const item = (0, ContentManager_1.getItem)(slot.itemId);
             lines.push(`  [${i + 1}] ${item?.name ?? slot.itemId} — ${item?.description ?? ''}`);
         });
         lines.push('  ─────────────────────────────────────');
@@ -975,14 +1166,14 @@ function handleLearn(args, save) {
     }
     const page = parseInventoryPageIndex(raw, save);
     const scrolls = save.inventory.filter(slot => {
-        const item = (0, items_1.getItem)(slot.itemId);
+        const item = (0, ContentManager_1.getItem)(slot.itemId);
         return item?.type === 'scroll';
     });
     if (page < 0 || page >= scrolls.length) {
         return { text: 'Invalid scroll number. Type "learn" to see your scrolls.' };
     }
     const slot = scrolls[page];
-    const result = (0, skills_1.getSkillByItemId)(slot.itemId);
+    const result = (0, ContentManager_1.getSkillByItemId)(slot.itemId);
     if (!result) {
         return { text: 'Could not determine the skill taught by this scroll.' };
     }
@@ -1023,11 +1214,16 @@ function handleCraft(args, save) {
         return { text: 'Usage: craft [n] — type "craft" without args to see recipes.' };
     }
     const result = (0, CraftingManager_1.craftItem)(save, idx);
-    return { text: result.text, newSave: result.newSave };
+    // Wire achievements: increment craft count
+    return withAchievements({ text: result.text, newSave: result.newSave }, result.newSave ?? save, { itemsCrafted: 1 });
 }
 // ─── Gathering ────────────────────────────────────────────────────────────────
 function handleGather(verb, save) {
     const result = (0, CraftingManager_1.gatherFromNode)(save, save.worldState.currentArea, verb);
+    // Wire achievements: increment gather count
+    if (result.newSave) {
+        return withAchievements({ text: result.text, newSave: result.newSave }, result.newSave, { resourcesGathered: 1 });
+    }
     return { text: result.text, newSave: result.newSave };
 }
 // ─── Pending Loot ────────────────────────────────────────────────────────────
@@ -1038,10 +1234,10 @@ function handlePendingLoot(save, subargs) {
     }
     const lines = ['  ══════════ PENDING LOOT ══════════'];
     loot.forEach((drop, i) => {
-        const item = (0, items_1.getItem)(drop.itemId);
+        const item = (0, ContentManager_1.getItem)(drop.itemId);
         const qty = drop.quantity > 1 ? ` x${drop.quantity}` : '';
-        const col = item ? (0, items_1.rarityColor)(item.rarity) : '';
-        const r = items_1.RARITY_RESET;
+        const col = item ? (0, ContentManager_1.rarityColor)(item.rarity) : '';
+        const r = ContentManager_1.RARITY_RESET;
         lines.push(`  [${i + 1}] ${col}${drop.name}${r}${qty}  (${drop.rarity})`);
     });
     lines.push('  ─────────────────────────────────────');
@@ -1080,10 +1276,10 @@ function handlePendingLoot(save, subargs) {
 // ─── Dungeon Chest ──────────────────────────────────────────────────────────
 function handleDungeonChest(save) {
     const areaId = save.worldState.currentArea;
-    if (!(0, areas_1.isDungeonArea)(areaId)) {
+    if (!(0, ContentManager_1.isDungeonArea)(areaId)) {
         return { text: 'You are not in a dungeon.' };
     }
-    const dungeonInfo = (0, dungeons_1.getDungeonForArea)(areaId);
+    const dungeonInfo = (0, ContentManager_1.getDungeonForArea)(areaId);
     if (!dungeonInfo)
         return { text: 'Unknown dungeon.' };
     const existing = save.worldState.dungeonChests?.find(c => c.areaId === areaId);
@@ -1093,13 +1289,13 @@ function handleDungeonChest(save) {
     const chestLoot = (0, LootEngine_1.getDungeonChestLoot)(dungeonInfo.id);
     const lines = ['  ══════════ DUNGEON CHEST ══════════'];
     for (const drop of chestLoot) {
-        const item = (0, items_1.getItem)(drop.itemId);
+        const item = (0, ContentManager_1.getItem)(drop.itemId);
         if (drop.itemId === 'gold') {
             lines.push(`  + ${drop.quantity}g`);
         }
         else {
-            const col = item ? (0, items_1.rarityColor)(item.rarity) : '';
-            const r = items_1.RARITY_RESET;
+            const col = item ? (0, ContentManager_1.rarityColor)(item.rarity) : '';
+            const r = ContentManager_1.RARITY_RESET;
             lines.push(`  + ${col}${drop.name}${r} x${drop.quantity}`);
         }
     }
@@ -1148,7 +1344,7 @@ function formatSkills(save) {
 }
 // ─── Updated look with gathering nodes ─────────────────────────────────────
 function formatAreaNodesDisplay(areaId) {
-    const nodes = crafting_1.GATHERING_NODES[areaId] ?? [];
+    const nodes = (0, ContentManager_1.getAreaNodes)(areaId);
     if (nodes.length === 0)
         return '';
     const lines = ['  Resource Nodes:'];
@@ -1295,10 +1491,10 @@ function handleShareLoot(args, save) {
     if (!subcmd || subcmd === 'list') {
         const lines = ['  ══════════ PENDING LOOT ══════════'];
         loot.forEach((drop, i) => {
-            const item = (0, items_1.getItem)(drop.itemId);
+            const item = (0, ContentManager_1.getItem)(drop.itemId);
             const qty = drop.quantity > 1 ? ` x${drop.quantity}` : '';
-            const col = item ? (0, items_1.rarityColor)(item.rarity) : '';
-            const r = items_1.RARITY_RESET;
+            const col = item ? (0, ContentManager_1.rarityColor)(item.rarity) : '';
+            const r = ContentManager_1.RARITY_RESET;
             lines.push(`  [${i + 1}] ${col}${drop.name}${r}${qty}  (${drop.rarity})`);
         });
         lines.push('  ─────────────────────────────────────');
@@ -1343,7 +1539,7 @@ function handleShareLoot(args, save) {
         }
         // Give item — add directly to target's inventory, remove from pendingLoot
         const { inventoryAdd: ia } = require('../items/InventoryManager');
-        const dropItem = (0, items_1.getItem)(drop.itemId);
+        const dropItem = (0, ContentManager_1.getItem)(drop.itemId);
         if (dropItem) {
             const result = ia(targetSession.currentState, drop.itemId, drop.quantity);
             targetSession.currentState = result.save;
@@ -1359,7 +1555,7 @@ function handleShareLoot(args, save) {
 // ─── PvP ───────────────────────────────────────────────────────────────────────────
 function handlePvp(args, save) {
     const subcmd = args[0]?.toLowerCase();
-    const area = (0, areas_1.getArea)(save.worldState.currentArea);
+    const area = (0, ContentManager_1.getArea)(save.worldState.currentArea);
     if (!subcmd || subcmd === 'status') {
         const lines = ['  ══════════ PvP STATUS ══════════'];
         lines.push(`  PvP Mode:     ${save.pvp.enabled ? '[ON] — You can attack and be attacked' : '[OFF] — You are safe'}`);
@@ -1370,6 +1566,10 @@ function handlePvp(args, save) {
         lines.push('  pvp area      — check current area PvP status');
         lines.push('  ─────────────────────────────────────');
         lines.push('  NOTE: Safe zones (city squares) always block PvP.');
+        lines.push('');
+        lines.push('  PvP LEADERBOARD (Phase 8)');
+        lines.push('  leaderboard         — view top PvP players');
+        lines.push('  rank                — see your personal PvP rank');
         return { text: lines.join('\n') };
     }
     if (subcmd === 'on') {
@@ -1398,7 +1598,7 @@ function handlePvp(args, save) {
     return { text: 'Usage: pvp [on|off|status|area]' };
 }
 // ════════════════════════════════════════════════════════════════════════════
-//  PHASE 7 — ACHIEVEMENTS & WORLD BOSS HANDLERS
+//  PHASE 8 — ACHIEVEMENTS & WORLD BOSS COMBAT
 // ════════════════════════════════════════════════════════════════════════════
 // ─── Achievements ──────────────────────────────────────────────────────────────
 function handleAchievements(save) {
@@ -1430,7 +1630,7 @@ function handleWorldBoss(args, save) {
         }
         const bossId = active[0].bossId;
         const targetAreaId = WorldBossEngine_1.WORLD_BOSS_SPAWNS[bossId] ?? 'ashford_village_square';
-        const target = (0, areas_1.getArea)(targetAreaId);
+        const target = (0, ContentManager_1.getArea)(targetAreaId);
         const isCity = target?.regenState === 'city';
         const newSave = {
             ...save,
@@ -1446,11 +1646,25 @@ function handleWorldBoss(args, save) {
             pvp: { ...save.pvp, safeZone: target?.safeZone ?? false },
         };
         return {
-            text: `You travel to the World Boss location: ${target?.name ?? targetAreaId}.\n${(0, areas_1.describeArea)(targetAreaId)}`,
+            text: `You travel to the World Boss location: ${target?.name ?? targetAreaId}.\n${(0, ContentManager_1.describeArea)(targetAreaId)}\n\nPhase 8: Use "worldboss attack" to join the fight!`,
             newSave,
         };
     }
-    return { text: 'Usage: worldboss [status|join]\n  worldboss status  — check active world boss\n  worldboss join    — travel to the active world boss location' };
+    return {
+        text: 'Usage: worldboss [status|join]\n' +
+            '  worldboss status  — check active world boss HP\n' +
+            '  worldboss join    — travel to the active world boss location\n' +
+            '  worldboss attack  — attack the active world boss\n' +
+            '  worldboss flee    — flee from the world boss fight',
+    };
+}
+// ─── PvP Leaderboard (Phase 8) ────────────────────────────────────────────────
+function handleLeaderboard(args, save) {
+    const limit = parseInt(args[0] ?? '10');
+    return { text: LeaderboardManager_1.leaderboardManager.formatLeaderboard(isNaN(limit) ? 10 : limit) };
+}
+function handleRank(save) {
+    return { text: LeaderboardManager_1.leaderboardManager.formatRank(save.playerId) };
 }
 // ════════════════════════════════════════════════════════════════════════════
 //  PHASE 4 — SOCIAL & MULTIPLAYER HANDLERS
@@ -1462,7 +1676,7 @@ function handleWho(save) {
     if (players.length === 0) {
         return { text: 'You are alone here.' };
     }
-    const areaName = (0, areas_1.getArea)(areaId)?.name ?? areaId;
+    const areaName = (0, ContentManager_1.getArea)(areaId)?.name ?? areaId;
     const lines = [
         `  Players in ${areaName} (${players.length} online):`,
         `  ${'─'.repeat(44)}`,
@@ -1502,6 +1716,93 @@ function handleWhisper(targetName, text, save) {
     // Deliver to target
     PresenceManager_1.presenceManager.broadcastToPlayer(targetSession.playerId, `[Whisper from ${save.stats.name}]: ${text}`);
     return { text: `[Whisper to ${targetName}]: ${text}` };
+}
+// ─── Friends (Phase 10) ─────────────────────────────────────────────────────────
+const FriendManager_1 = require("../social/FriendManager");
+async function handleFriend(args, save) {
+    const subcmd = args[0]?.toLowerCase();
+    // friend — list friends
+    if (!subcmd || subcmd === 'list') {
+        const friends = await FriendManager_1.friendManager.getFriendsList(save.playerId);
+        return { text: (0, FriendManager_1.formatFriendsList)(friends) };
+    }
+    // friend requests
+    if (subcmd === 'requests' || subcmd === 'pending') {
+        const requests = await FriendManager_1.friendManager.getPendingRequestsList(save.playerId);
+        return { text: (0, FriendManager_1.formatPendingRequests)(requests) };
+    }
+    // friend add <name>
+    if (subcmd === 'add') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: friend add <player_name>' };
+        const result = await FriendManager_1.friendManager.sendFriendRequest(save.playerId, save.stats.name, targetName);
+        return { text: result.success ? `Friend request sent to ${targetName}!` : `Error: ${result.error}` };
+    }
+    // friend accept <name>
+    if (subcmd === 'accept') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: friend accept <player_name>' };
+        const result = await FriendManager_1.friendManager.acceptFriend(save.playerId, save.stats.name, targetName);
+        return { text: result.success ? `You are now friends with ${targetName}!` : `Error: ${result.error}` };
+    }
+    // friend decline <name>
+    if (subcmd === 'decline') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: friend decline <player_name>' };
+        const result = await FriendManager_1.friendManager.declineFriend(save.playerId, targetName);
+        return { text: result.success ? `Friend request from ${targetName} declined.` : `Error: ${result.error}` };
+    }
+    // friend remove <name>
+    if (subcmd === 'remove' || subcmd === 'unfriend') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: friend remove <player_name>' };
+        const result = await FriendManager_1.friendManager.removeFriendRequest(save.playerId, targetName);
+        return { text: result.success ? `Removed ${targetName} from your friends list.` : `Error: ${result.error}` };
+    }
+    return {
+        text: `Usage: friend [list|requests|add <name>|accept <name>|decline <name>|remove <name>]
+  friend list       — view your friends list
+  friend requests   — view pending friend requests
+  friend add <name> — send a friend request
+  friend accept <name>  — accept a friend request
+  friend decline <name> — decline a friend request
+  friend remove <name>   — remove a friend`,
+    };
+}
+// ─── Block (Phase 10) ──────────────────────────────────────────────────────────
+async function handleBlock(args, save) {
+    const subcmd = args[0]?.toLowerCase();
+    // block — list blocked
+    if (!subcmd || subcmd === 'list') {
+        const blocked = await FriendManager_1.friendManager.getBlockedList(save.playerId);
+        return { text: (0, FriendManager_1.formatBlockedList)(blocked) };
+    }
+    // block add <name>
+    if (subcmd === 'add') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: block add <player_name>' };
+        const result = await FriendManager_1.friendManager.blockUser(save.playerId, save.stats.name, targetName);
+        return { text: result.success ? `${targetName} has been blocked.` : `Error: ${result.error}` };
+    }
+    // block remove <name>
+    if (subcmd === 'remove' || subcmd === 'unblock') {
+        const targetName = args[1];
+        if (!targetName)
+            return { text: 'Usage: block remove <player_name>' };
+        const result = await FriendManager_1.friendManager.unblockUser(save.playerId, targetName);
+        return { text: result.success ? `${targetName} has been unblocked.` : `Error: ${result.error}` };
+    }
+    return {
+        text: `Usage: block [list|add <name>|remove <name>]
+  block list     — view your blocked players
+  block add <name>    — block a player
+  block remove <name> — unblock a player`,
+    };
 }
 // ─── Shout ───────────────────────────────────────────────────────────────────
 function handleShout(text, save) {
@@ -1691,12 +1992,12 @@ function handleTrade(args, save) {
         // Find item in inventory
         const unequipped = save.inventory.filter(s => !s.equipped);
         const slot = unequipped.find(s => {
-            const item = (0, items_1.getItem)(s.itemId);
+            const item = (0, ContentManager_1.getItem)(s.itemId);
             return item?.name.toLowerCase().includes(itemName.toLowerCase());
         });
         if (!slot)
             return { text: `You don't have an item matching "${itemName}". Check your inventory.` };
-        const itemDef = (0, items_1.getItem)(slot.itemId);
+        const itemDef = (0, ContentManager_1.getItem)(slot.itemId);
         if (itemDef?.tradelock)
             return { text: 'That item cannot be traded.' };
         const result = TradeManager_1.tradeManager.offer(save.playerId, targetName, slot.itemId, itemDef?.name ?? slot.itemId, itemDef?.rarity ?? 'common', itemDef?.description ?? '', price);

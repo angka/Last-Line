@@ -654,8 +654,13 @@ function serveAdminUI(req: express.Request, res: express.Response): void {
 app.use('/admin-panel', (_req, _res, _next) => { /* middleware marker */ });
 app.get('/admin-panel', serveAdminUI);
 app.use('/admin-panel', express.static(UI_DIR, { index: 'index.html' }));
-// Catch-all for SPA
-app.get('/admin-panel/*', serveAdminUI);
+
+// Catch-all for SPA (must come after static files)
+const spaHandler = (req: express.Request, res: express.Response) => {
+  serveAdminUI(req, res);
+};
+app.get('/admin-panel/*path', spaHandler);
+app.use('/admin-panel/*path', spaHandler);
 
 // ─── Start Server ───────────────────────────────────────────────────────────────
 

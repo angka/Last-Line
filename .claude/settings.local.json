@@ -33,7 +33,8 @@
       "Bash(Test-Path C:\\\\Users\\\\linsp\\\\Project\\\\Last Line\\\\src\\\\data\\\\archive *)",
       "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development npm run start)",
       "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development timeout 8 npm run start)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Bash(chmod +x install-server.sh)"
     ]
   }
 }

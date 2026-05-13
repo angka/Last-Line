@@ -170,6 +170,47 @@ sudo bash install-server.sh --user gameuser
 sudo bash install-server.sh --user gameuser --repo https://github.com/your-fork/Last-Line.git
 ```
 
+#### Full Usage Reference
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--user <username>` | Create/use specified system user | `lastline` |
+| `--repo <url>` | Git repository URL | `https://github.com/angka/Last-Line.git` |
+| `--install-dir <path>` | Installation directory | `/opt/last-line` |
+| `--help`, `-h` | Show help message | - |
+
+#### Environment Variables
+
+You can also customize ports using environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GAME_PORT` | 8080 | Game server WebSocket port |
+| `ADMIN_PORT` | 3001 | Admin panel HTTP port |
+| `STORE_PORT` | 3002 | Cosmetic store port |
+
+Example with custom ports:
+```bash
+GAME_PORT=9000 ADMIN_PORT=9001 STORE_PORT=9002 sudo bash install-server.sh
+```
+
+#### What the Script Does
+
+| Step | Action |
+|------|--------|
+| 1 | Update apt packages |
+| 2 | Install Node.js 20.x |
+| 3 | Install git, curl, ufw |
+| 4 | Create system user |
+| 5 | Clone repository |
+| 6 | Install npm dependencies |
+| 7 | Build TypeScript |
+| 8 | Create saves/content directories |
+| 9 | Configure UFW firewall |
+| 10 | Create systemd service |
+| 11 | Generate .env configuration |
+| 12 | Start server |
+
 ### Manual Installation
 
 If you prefer manual setup:
@@ -302,13 +343,15 @@ cd /opt/last-line
 npm start
 ```
 
-### Ports Overview
+### Default Ports
 
-| Service | Default Port | Description |
-|---------|-------------|-------------|
-| Game Server | 8080 | WebSocket for client connections |
-| Admin Panel | 3001 | Browser-based admin SPA |
-| Cosmetic Store | 3002 | Browser-based cosmetic store |
+| Port | Service | Access URL | Firewall Rule |
+|------|---------|------------|----------------|
+| 8080 | Game Server | `ws://<server>:8080` | `ufw allow 8080/tcp` |
+| 3001 | Admin Panel | `http://<server>:3001/admin-panel` | `ufw allow 3001/tcp` |
+| 3002 | Cosmetic Store | `http://<server>:3002/store/` | `ufw allow 3002/tcp` |
+
+**Note:** All three ports are automatically opened by the install script when UFW is active.
 
 ---
 

@@ -247,11 +247,14 @@ EOF
 fi
 
 # Create systemd service
+log_info "Creating systemd service with auto-start enabled..."
+
 run_as tee "${SERVICE_FILE}" > /dev/null << EOF
 [Unit]
 Description=Last Line - MMO CLI Adventure Game Server
 Documentation=https://github.com/angka/Last-Line
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -260,25 +263,51 @@ Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node dist/server/index.js
+
+# Auto-restart configuration
 Restart=on-failure
-RestartSec=5
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Restart limits (prevent infinite loops)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logging
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=30
+SyslogIdentifier=last-line
 
 # Security hardening
 NoNewPrivileges=true
+PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=${INSTALL_DIR}
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Reload systemd and enable service for auto-start on boot
 run_as systemctl daemon-reload
 run_as systemctl enable "${SERVICE_NAME}"
-log_success "Systemd service created and enabled"
+log_success "Systemd service created and enabled for auto-start"
+
+# Verify enable was successful
+if run_as systemctl is-enabled "${SERVICE_NAME}" &>/dev/null; then
+    log_success "Service is enabled - will auto-start on server reboot"
+else
+    log_error "Failed to enable service!"
+    exit 1
+fi
 
 # ─── Final Summary ─────────────────────────────────────────────────────────────
 echo ""
@@ -291,12 +320,26 @@ echo "  Game Port:             ${GAME_PORT}"
 echo "  Admin Panel:          http://localhost:${ADMIN_PORT}/admin-panel"
 echo "  Cosmetic Store:         http://localhost:${STORE_PORT}/store/"
 echo ""
+echo "  ┌─────────────────────────────────────────────────────────────────────┐"
+echo "  │  AUTO-START ENABLED                                                 │"
+echo "  │  Server will automatically start after system reboot!                │"
+echo "  └─────────────────────────────────────────────────────────────────────┘"
+echo ""
 echo "  Service Commands:"
-echo "    sudo systemctl start ${SERVICE_NAME}     # Start server"
-echo "    sudo systemctl stop ${SERVICE_NAME}      # Stop server"
-echo "    sudo systemctl restart ${SERVICE_NAME}   # Restart server"
+echo "    sudo systemctl start ${SERVICE_NAME}      # Start server"
+echo "    sudo systemctl stop ${SERVICE_NAME}       # Stop server"
+echo "    sudo systemctl restart ${SERVICE_NAME}    # Restart server"
 echo "    sudo systemctl status ${SERVICE_NAME}    # Check status"
 echo "    sudo journalctl -u ${SERVICE_NAME} -f   # View logs"
+echo ""
+echo "  Auto-start Verification:"
+echo "    sudo systemctl is-enabled ${SERVICE_NAME}   # Should show 'enabled'"
+echo "    systemctl list-unit-files | grep ${SERVICE_NAME}"
+echo ""
+echo "  To reboot and test auto-start:"
+echo "    sudo reboot"
+echo "    # After reboot:"
+echo "    sudo systemctl status ${SERVICE_NAME}"
 echo ""
 echo "  Default Admin Credentials:"
 echo "    Username: admin"
@@ -307,11 +350,15 @@ echo "     Edit: ${ENV_FILE}"
 echo ""
 log_info "Starting server..."
 run_as systemctl start "${SERVICE_NAME}"
-sleep 2
+sleep 3
 
 if run_as systemctl is-active --quiet "${SERVICE_NAME}"; then
     log_success "Server is running!"
     log_info "Connect clients to: <server-ip>:${GAME_PORT}"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════════════════"
+    log_success "Server auto-starts on reboot via systemd!"
+    echo "═══════════════════════════════════════════════════════════════════════════════"
 else
     log_error "Server failed to start. Check logs:"
     run_as journalctl -u "${SERVICE_NAME}" --no-pager -n 20

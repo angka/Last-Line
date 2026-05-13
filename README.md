@@ -128,9 +128,53 @@ last-line/
 
 ---
 
-## Server Installation (Ubuntu)
+## Server Installation (Ubuntu 24.04 LTS)
 
-### Prerequisites
+### Quick Install (Automated)
+
+The easiest way to install on a fresh Ubuntu 24.04 LTS server:
+
+```bash
+# Clone the repository
+git clone https://github.com/angka/Last-Line.git
+cd Last-Line
+
+# Run the automated installer
+sudo bash install-server.sh
+```
+
+The installer will:
+1. Update system packages
+2. Install Node.js 20.x, git, and required tools
+3. Clone repository from GitHub
+4. Install npm dependencies and build TypeScript
+5. Create required directories (saves, content)
+6. Configure firewall (UFW) for game ports
+7. Create systemd service for automatic startup
+8. Generate secure JWT secrets
+9. Start the server
+
+### Installation Options
+
+```bash
+# Install with specific git repository
+sudo bash install-server.sh --repo https://github.com/your-fork/Last-Line.git
+
+# Install to custom directory
+sudo bash install-server.sh --install-dir /home/user/games/last-line
+
+# Install as specific user
+sudo bash install-server.sh --user gameuser
+
+# Combined options
+sudo bash install-server.sh --user gameuser --repo https://github.com/your-fork/Last-Line.git
+```
+
+### Manual Installation
+
+If you prefer manual setup:
+
+#### Prerequisites
 
 ```bash
 # Update system
@@ -138,25 +182,22 @@ sudo apt update && sudo apt upgrade -y
 
 # Install Node.js 20.x
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+sudo apt install -y nodejs npm git ufw
 
 # Verify installation
 node --version  # Should show v20.x.x
 npm --version
 ```
 
-### Installation Steps
+#### Installation Steps
 
 ```bash
 # Create game directory
 sudo mkdir -p /opt/last-line
 cd /opt/last-line
 
-# Clone or copy project files
-# If using git:
-# git clone <repository-url> .
-# Or copy files manually:
-# scp -r ./last-line/* user@server:/opt/last-line/
+# Clone repository
+sudo git clone https://github.com/angka/Last-Line.git .
 
 # Install dependencies
 sudo npm install
@@ -169,7 +210,7 @@ sudo mkdir -p saves content
 sudo chmod 755 saves content
 ```
 
-### Configuration
+#### Configuration
 
 Create `.env` file in `/opt/last-line/`:
 
@@ -192,23 +233,14 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-### Running the Server
-
-```bash
-# Start server (foreground)
-cd /opt/last-line
-npm start
-
-# Start server with systemd (recommended for production)
-```
-
-### Systemd Service Setup
+#### Systemd Service Setup
 
 Create `/etc/systemd/system/last-line.service`:
 
 ```ini
 [Unit]
 Description=Last Line Game Server
+Documentation=https://github.com/angka/Last-Line
 After=network.target
 
 [Service]
@@ -220,6 +252,11 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/last-line
 
 [Install]
 WantedBy=multi-user.target
@@ -238,17 +275,40 @@ sudo systemctl status last-line
 sudo journalctl -u last-line -f
 ```
 
-### Firewall Setup
+#### Firewall Setup
 
 ```bash
 # Allow ports
 sudo ufw allow 8080/tcp   # Game server
-sudo ufw allow 3001/tcp    # Admin panel
-sudo ufw allow 3002/tcp    # Cosmetic store
+sudo ufw allow 3001/tcp   # Admin panel
+sudo ufw allow 3002/tcp   # Cosmetic store
 
 # Enable firewall (if not already enabled)
 sudo ufw enable
 ```
+
+### Server Management
+
+```bash
+# Service commands
+sudo systemctl start last-line      # Start server
+sudo systemctl stop last-line       # Stop server
+sudo systemctl restart last-line     # Restart server
+sudo systemctl status last-line     # Check status
+sudo journalctl -u last-line -f     # View live logs
+
+# Alternative: Run directly
+cd /opt/last-line
+npm start
+```
+
+### Ports Overview
+
+| Service | Default Port | Description |
+|---------|-------------|-------------|
+| Game Server | 8080 | WebSocket for client connections |
+| Admin Panel | 3001 | Browser-based admin SPA |
+| Cosmetic Store | 3002 | Browser-based cosmetic store |
 
 ---
 

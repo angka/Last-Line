@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import * as readline from 'readline';
 
-const SERVER_URL = 'ws://localhost:8080';
+const SERVER_URL = process.env.SERVER_URL || 'ws://localhost:8080';
 
 interface ClientState {
   socket: WebSocket;

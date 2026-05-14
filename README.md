@@ -403,12 +403,31 @@ sudo systemctl start last-line
 
 ## Client Installation
 
+### Connecting to Server
+
+By default, the client connects to `ws://localhost:8080`. To connect to a remote server, use the `SERVER_URL` environment variable:
+
+```bash
+# Windows (PowerShell)
+$env:SERVER_URL="ws://192.168.1.100:8080"; npm run client
+
+# Linux/macOS
+SERVER_URL=ws://192.168.1.100:8080 npm run client
+
+# Run with default (local server)
+npm run client
+```
+
 ### Windows
 
 #### Option 1: Pre-built (recommended)
 
 1. Download the `dist/client/` folder from the server
-2. Run: `node dist/client/index.js`
+2. Run with custom server:
+```powershell
+$env:SERVER_URL="ws://your-server-ip:8080"
+node dist/client/index.js
+```
 
 #### Option 2: From source
 
@@ -425,8 +444,11 @@ npm install
 # Build
 npm run build
 
-# Run client
+# Run client (local server)
 npm run client
+
+# Run client (remote server)
+$env:SERVER_URL="ws://your-server-ip:8080"; npm run client
 ```
 
 ### Linux
@@ -446,8 +468,11 @@ npm install
 # Build
 npm run build
 
-# Run client
+# Run client (local server)
 npm run client
+
+# Run client (remote server)
+SERVER_URL=ws://your-server-ip:8080 npm run client
 ```
 
 ### macOS
@@ -466,8 +491,11 @@ npm install
 # Build
 npm run build
 
-# Run client
+# Run client (local server)
 npm run client
+
+# Run client (remote server)
+SERVER_URL=ws://your-server-ip:8080 npm run client
 ```
 
 ### Connecting to Server

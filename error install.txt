@@ -1,0 +1,198 @@
+angka@Angka:~$ sudo curl -fsSL https://raw.githubusercontent.com/angka/Last-Line/refs/heads/main/install-server.sh | bash
+[INFO] Last Line Server Installation
+[INFO] ================================
+[INFO] Repository: https://github.com/angka/Last-Line.git
+[INFO] Install Dir: /opt/last-line
+[INFO] Game Port:   8080
+[INFO] Admin Port:  3001
+[INFO] Store Port:  3002
+[INFO] User:        angka
+[INFO] 
+[INFO] Step 1/10: Updating system packages...
+Hit:1 https://deb.nodesource.com/node_20.x nodistro InRelease
+Hit:2 https://download.docker.com/linux/ubuntu noble InRelease                                                                  
+Hit:3 http://azure.archive.ubuntu.com/ubuntu noble InRelease                                                                    
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Hit:5 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+Get:6 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:7 https://pkgs.tailscale.com/stable/ubuntu noble InRelease
+Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [2007 kB]
+Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1690 kB]
+Get:10 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1698 kB]
+Get:11 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [267 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1188 kB]
+Get:13 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [229 kB]
+Fetched 7338 kB in 3s (2869 kB/s)                                
+Reading package lists... Done
+(Reading database ... 74900 files and directories currently installed.)
+Preparing to unpack .../0-docker-ce-cli_5%3a29.5.2-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce-cli (5:29.5.2-1~ubuntu.24.04~noble) over (5:29.4.3-1~ubuntu.24.04~noble) ...
+Preparing to unpack .../1-containerd.io_2.2.4-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking containerd.io (2.2.4-1~ubuntu.24.04~noble) over (2.2.3-1~ubuntu.24.04~noble) ...
+Preparing to unpack .../2-docker-ce_5%3a29.5.2-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce (5:29.5.2-1~ubuntu.24.04~noble) over (5:29.4.3-1~ubuntu.24.04~noble) ...
+Preparing to unpack .../3-bind9-host_1%3a9.18.39-0ubuntu0.24.04.5_amd64.deb ...
+Unpacking bind9-host (1:9.18.39-0ubuntu0.24.04.5) over (1:9.18.39-0ubuntu0.24.04.3) ...
+Preparing to unpack .../4-bind9-dnsutils_1%3a9.18.39-0ubuntu0.24.04.5_amd64.deb ...
+Unpacking bind9-dnsutils (1:9.18.39-0ubuntu0.24.04.5) over (1:9.18.39-0ubuntu0.24.04.3) ...
+Preparing to unpack .../5-bind9-libs_1%3a9.18.39-0ubuntu0.24.04.5_amd64.deb ...
+Unpacking bind9-libs:amd64 (1:9.18.39-0ubuntu0.24.04.5) over (1:9.18.39-0ubuntu0.24.04.3) ...
+Preparing to unpack .../6-docker-ce-rootless-extras_5%3a29.5.2-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce-rootless-extras (5:29.5.2-1~ubuntu.24.04~noble) over (5:29.4.3-1~ubuntu.24.04~noble) ...
+Preparing to unpack .../7-docker-compose-plugin_5.1.4-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-compose-plugin (5.1.4-1~ubuntu.24.04~noble) over (5.1.3-1~ubuntu.24.04~noble) ...
+Preparing to unpack .../8-libarchive13t64_3.7.2-2ubuntu0.7_amd64.deb ...
+Unpacking libarchive13t64:amd64 (3.7.2-2ubuntu0.7) over (3.7.2-2ubuntu0.6) ...
+Preparing to unpack .../9-tailscale_1.98.3_amd64.deb ...
+Unpacking tailscale (1.98.3) over (1.98.1) ...
+Setting up bind9-libs:amd64 (1:9.18.39-0ubuntu0.24.04.5) ...
+Setting up containerd.io (2.2.4-1~ubuntu.24.04~noble) ...
+Setting up docker-compose-plugin (5.1.4-1~ubuntu.24.04~noble) ...
+Setting up docker-ce-cli (5:29.5.2-1~ubuntu.24.04~noble) ...
+Setting up tailscale (1.98.3) ...
+Setting up docker-ce-rootless-extras (5:29.5.2-1~ubuntu.24.04~noble) ...
+Setting up bind9-host (1:9.18.39-0ubuntu0.24.04.5) ...
+Setting up libarchive13t64:amd64 (3.7.2-2ubuntu0.7) ...
+Setting up docker-ce (5:29.5.2-1~ubuntu.24.04~noble) ...
+Setting up bind9-dnsutils (1:9.18.39-0ubuntu0.24.04.5) ...
+Processing triggers for man-db (2.12.0-4build2) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.7) ...
+Scanning processes...                                                                                                            
+Scanning linux images...                                                                                                         
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+[SUCCESS] System updated
+[INFO] Step 2/10: Installing Node.js 20...
+[WARN] Node.js already installed: v20.20.2
+[SUCCESS] npm version: 10.8.2
+[INFO] Step 3/10: Installing git and required tools...
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (8.5.0-2ubuntu10.9).
+git is already the newest version (1:2.43.0-1ubuntu7.3).
+unzip is already the newest version (6.0-28ubuntu4.1).
+ufw is already the newest version (0.36.2-6).
+The following packages were automatically installed and are no longer required:
+  libslirp0 slirp4netns
+Use 'sudo apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 6 not upgraded.
+git version 2.43.0
+[SUCCESS] Git installed
+[INFO] Step 4/10: User 'angka' already exists
+[INFO] Step 5/10: Cloning repository...
+[WARN] Repository already exists at /opt/last-line
+[INFO] Pulling latest changes...
+Already up to date.
+[INFO] Step 6/10: Installing npm dependencies...
+
+up to date, audited 101 packages in 888ms
+
+24 packages are looking for funding
+  run `npm fund` for details
+
+3 moderate severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.15.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+npm notice To update run: npm install -g npm@11.15.0
+npm notice
+[SUCCESS] Dependencies installed
+[INFO] Step 7/10: Building TypeScript project...
+
+> last-line@0.1.0 build
+> tsc
+
+[SUCCESS] Project built
+[INFO] Step 8/10: Creating required directories...
+[SUCCESS] Directories created
+[INFO] Step 9/10: Configuring firewall...
+[INFO] UFW is active, opening ports...
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Firewall reloaded
+[SUCCESS] Firewall configured (8080, 3001, 3002 open)
+[INFO] Step 10/10: Creating systemd service...
+[INFO] Creating systemd service with auto-start enabled...
+[SUCCESS] Systemd service created and enabled for auto-start
+[SUCCESS] Service is enabled - will auto-start on server reboot
+
+═══════════════════════════════════════════════════════════════════════════════
+[SUCCESS] Installation Complete!
+═══════════════════════════════════════════════════════════════════════════════
+
+  Installation Directory: /opt/last-line
+  Game Port:             8080
+  Admin Panel:          http://localhost:3001/admin-panel
+  Cosmetic Store:         http://localhost:3002/store/
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  AUTO-START ENABLED                                                 │
+  │  Server will automatically start after system reboot!                │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  Service Commands:
+    sudo systemctl start last-line      # Start server
+    sudo systemctl stop last-line       # Stop server
+    sudo systemctl restart last-line    # Restart server
+    sudo systemctl status last-line    # Check status
+    sudo journalctl -u last-line -f   # View logs
+
+  Auto-start Verification:
+    sudo systemctl is-enabled last-line   # Should show 'enabled'
+    systemctl list-unit-files | grep last-line
+
+  To reboot and test auto-start:
+    sudo reboot
+    # After reboot:
+    sudo systemctl status last-line
+
+  Default Admin Credentials:
+    Username: admin
+    Password:  admin123
+
+  ⚠️  IMPORTANT: Change the default admin password!
+     Edit: /opt/last-line/.env
+
+[INFO] Starting server...
+[ERROR] Server failed to start. Check logs:
+May 23 05:08:09 Angka systemd[1]: /etc/systemd/system/last-line.service:22: Unknown key name 'StartLimitIntervalSec' in section 'Service', ignoring.
+May 23 05:08:18 Angka systemd[1]: last-line.service: Scheduled restart job, restart counter is at 75027.
+May 23 05:08:18 Angka systemd[1]: Started last-line.service - Last Line - MMO CLI Adventure Game Server.
+May 23 05:08:18 Angka last-line[2245759]: /opt/last-line/dist/server/persistence/PlayerDbManager.js:85
+May 23 05:08:18 Angka last-line[2245759]:     throw new Error('FATAL: PLAYER_JWT_SECRET environment variable is not set. Set it to a secure random string in production.');
+May 23 05:08:18 Angka last-line[2245759]:     ^
+May 23 05:08:18 Angka last-line[2245759]: Error: FATAL: PLAYER_JWT_SECRET environment variable is not set. Set it to a secure random string in production.
+May 23 05:08:18 Angka last-line[2245759]:     at Object.<anonymous> (/opt/last-line/dist/server/persistence/PlayerDbManager.js:85:11)
+May 23 05:08:18 Angka last-line[2245759]:     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+May 23 05:08:18 Angka last-line[2245759]:     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+May 23 05:08:18 Angka last-line[2245759]:     at Module.load (node:internal/modules/cjs/loader:1266:32)
+May 23 05:08:18 Angka last-line[2245759]:     at Module._load (node:internal/modules/cjs/loader:1091:12)
+May 23 05:08:18 Angka last-line[2245759]:     at Module.require (node:internal/modules/cjs/loader:1289:19)
+May 23 05:08:18 Angka last-line[2245759]:     at require (node:internal/modules/helpers:182:18)
+May 23 05:08:18 Angka last-line[2245759]:     at Object.<anonymous> (/opt/last-line/dist/server/social/FriendManager.js:20:27)
+May 23 05:08:18 Angka last-line[2245759]:     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+May 23 05:08:18 Angka last-line[2245759]:     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+May 23 05:08:18 Angka last-line[2245759]: Node.js v20.20.2
+May 23 05:08:18 Angka systemd[1]: last-line.service: Main process exited, code=exited, status=1/FAILURE
+May 23 05:08:18 Angka systemd[1]: last-line.service: Failed with result 'exit-code'.

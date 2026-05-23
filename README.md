@@ -606,14 +606,87 @@ First-time characters see:
 
 ### Combat
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `attack <n>` | `a` | Attack enemy (option: target number) |
-| `skill <t> <n>` | `magic` | Use physical/magic skill |
-| `learn <skill>` | | Learn new skill from scroll |
-| `item <n>` | `i` | Use item in combat |
-| `flee` | `f` | Attempt to flee combat |
-| `log` | | View combat status |
+#### Initiating Combat
+
+Combat begins automatically when you:
+- **Explore a dungeon floor** — `explore` triggers 100% encounter chance in dungeons
+- **Enter wilderness areas** — `go <dir>` into non-safe zones rolls for random encounter
+
+```
+Enemies: [1] Goblin (50/50) [2] Goblin Archer (40/40)
+
+[Your turn!] HP: 100/100 | MP: 50/50
+  Choose: attack <n> / skill <type> <n> / item <n> / flee
+```
+
+#### Combat Commands
+
+| Command | Alias | Example | Description |
+|---------|-------|---------|-------------|
+| `attack [n]` | `a` | `a 2` | Attack enemy by number (default: 1) |
+| `flee` | `f` | `f` | Attempt escape (10-90% based on agility) |
+| `item <n>` | `i` | `i 1` | Use consumable item during combat |
+| `skill <type> <n>` | | `skill phys 1` | Use skill (see Skill Types below) |
+| `magic <n>` | | `magic 1` | Shortcut for `skill magic <n>` |
+| `log` | | `log` | Show full combat status and history |
+
+#### Skill Types
+
+| Type | Alias | Usage | Description |
+|------|-------|-------|-------------|
+| `physical` | `phys` | `skill phys 1` | Melee/ranged physical damage |
+| `magic` | `mag` | `skill magic 1` | Elemental magic attacks |
+| `support` | `sup` | `skill support 1` | Heals, buffs, cleanse |
+
+#### Boss Battles
+
+Boss encounters are triggered by exploring **boss floors** in dungeons (e.g., Goblin Warren Floor 3):
+
+- Special "BOSS BATTLE!" display marks boss fights
+- Bosses have enhanced HP, unique abilities, and special loot tables
+- Defeating bosses unlocks treasure chests (`chest` command)
+- Dungeon progress tracked in `dungeon_status`
+
+Example boss floor:
+```
+═══════════════════════════════════════════════════════════════
+  BOSS BATTLE! — Goblin Chieftain
+═══════════════════════════════════════════════════════════════
+  Enemy: Goblin Chieftain [BOSS]  HP: 500/500
+
+[Your turn!] HP: 100/100 | MP: 50/50
+  Choose: attack / skill <type> <n> / item / flee
+═══════════════════════════════════════════════════════════════
+```
+
+#### Combat Mechanics
+
+- **Turn Order**: Based on agility stat + random factor
+- **Flee Chance**: `(Your Agility - Enemy Agility) / 100 + 50%`, clamped 10-90%
+- **Failed Flee**: Enemy gets a free attack
+- **Status Effects**: Poison, Burn, Bleed deal damage over turns
+- **Defeat**: Lose 10% gold, respawn at city with 30% HP/MP
+
+#### Party Combat
+
+When exploring with 2+ party members in the same area, combat is shared:
+
+| Command | Example | Description |
+|---------|---------|-------------|
+| `party_start` | `party_start` | Prepare party combat mode |
+| `attack [n]` | `a 1` | Standard attack |
+| `heal <name>` | `heal Kael` | View ally HP for healing |
+| `buff <name>` | `buff Kael` | View buff options |
+| `revive <name>` | `revive Kael` | Revive downed ally (50 MP) |
+| `flee` | `f` | Attempt party escape |
+
+#### Loot
+
+After defeating enemies:
+- `loot` — claim dropped loot
+- `pending_loot` — view pending loot
+- `pending_loot claim` — claim all pending loot
+- `chest` — open boss treasure chest (after boss kill)
 
 ### Dungeon
 

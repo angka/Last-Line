@@ -38,7 +38,58 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = __importDefault(require("ws"));
 const readline = __importStar(require("readline"));
-const SERVER_URL = 'ws://localhost:8080';
+const SERVER_URL = process.env.SERVER_URL || 'ws://localhost:8080';
+// ─── Server Configuration ────────────────────────────────────────────────────────
+const TAILSCALE_IP = '100.108.29.73';
+const DEFAULT_PORT = '8080';
+let serverUrl = null;
+function getServerUrl() {
+    return serverUrl || SERVER_URL;
+}
+function promptServerSelection() {
+    console.log('\n╔═══════════════════════════════════════════════════════╗');
+    console.log('║         Last Line - Server Selection                   ║');
+    console.log('╠═══════════════════════════════════════════════════════╣');
+    console.log(`║  [1] Connect to Tailscale (${TAILSCALE_IP})   ║`);
+    console.log('║  [2] Connect to localhost                            ║');
+    console.log('║  [3] Enter custom IP address                        ║');
+    console.log('║  [Q] Quit                                           ║');
+    console.log('╚═══════════════════════════════════════════════════════╝');
+    return new Promise((resolve) => {
+        rl.question('Enter selection: ', (choice) => {
+            const trimmed = choice.trim().toLowerCase();
+            if (trimmed === '1') {
+                console.log(`\n  → Connecting to ${TAILSCALE_IP}:${DEFAULT_PORT}...`);
+                resolve(`ws://${TAILSCALE_IP}:${DEFAULT_PORT}`);
+            }
+            else if (trimmed === '2') {
+                console.log('\n  → Connecting to localhost:8080...');
+                resolve('ws://localhost:8080');
+            }
+            else if (trimmed === '3') {
+                rl.question('  Enter server IP (without port): ', (ip) => {
+                    const cleanIp = ip.trim();
+                    if (!cleanIp) {
+                        console.log('  Invalid IP. Using Tailscale default.');
+                        resolve(`ws://${TAILSCALE_IP}:${DEFAULT_PORT}`);
+                    }
+                    else {
+                        console.log(`\n  → Connecting to ${cleanIp}:${DEFAULT_PORT}...`);
+                        resolve(`ws://${cleanIp}:${DEFAULT_PORT}`);
+                    }
+                });
+            }
+            else if (trimmed === 'q') {
+                console.log('\n  Goodbye!');
+                process.exit(0);
+            }
+            else {
+                console.log('  Invalid selection. Please try again.');
+                resolve(promptServerSelection());
+            }
+        });
+    });
+}
 let state = null;
 const rl = readline.createInterface({
     input: process.stdin,
@@ -120,7 +171,7 @@ function displayStore(data) {
 // ─── Auth Functions ─────────────────────────────────────────────────────────────
 async function authLogin() {
     return new Promise((resolve) => {
-        const ws = new ws_1.default(SERVER_URL);
+        const ws = new ws_1.default(getServerUrl());
         ws.on('open', () => {
             rl.question('  Username or email: ', (username) => {
                 rl.question('  Password: ', async (password) => {
@@ -145,7 +196,7 @@ async function authLogin() {
 }
 async function authRegister() {
     return new Promise((resolve) => {
-        const ws = new ws_1.default(SERVER_URL);
+        const ws = new ws_1.default(getServerUrl());
         ws.on('open', () => {
             rl.question('  Choose a username (3-20 chars, letters/numbers/underscore): ', (username) => {
                 rl.question('  Email: ', (email) => {
@@ -172,7 +223,7 @@ async function authRegister() {
 }
 // ─── Connection ─────────────────────────────────────────────────────────────────
 function connectWithAuth(playerId, playerName, token, slot = 1) {
-    const ws = new ws_1.default(SERVER_URL);
+    const ws = new ws_1.default(getServerUrl());
     ws.on('open', () => {
         console.log(`[Connected] Logging in as ${playerName}...`);
         ws.send(JSON.stringify({ type: 'connect', playerId, name: playerName, token, slot }));
@@ -315,7 +366,7 @@ function doGuest() {
     // Guest mode: simple registration without email
     const guestId = 'guest_' + Date.now();
     const guestName = 'Guest' + Math.floor(Math.random() * 9999);
-    const ws = new ws_1.default(SERVER_URL);
+    const ws = new ws_1.default(getServerUrl());
     ws.on('open', () => {
         ws.send(JSON.stringify({ type: 'auth_register', username: guestName, email: guestId + '@guest.local', password: 'guest_' + guestId }));
     });
@@ -377,5 +428,18 @@ function characterSelect(playerId, playerName, token) {
     });
 }
 // ─── Boot ───────────────────────────────────────────────────────────────────────
-mainMenu();
+async function boot() {
+    // Check for SERVER_URL env var first
+    if (process.env.SERVER_URL) {
+        serverUrl = process.env.SERVER_URL;
+        console.log(`\n  → Using server from SERVER_URL: ${serverUrl}`);
+        mainMenu();
+        return;
+    }
+    // Show server selection menu
+    const selectedUrl = await promptServerSelection();
+    serverUrl = selectedUrl;
+    mainMenu();
+}
+boot();
 //# sourceMappingURL=index.js.map

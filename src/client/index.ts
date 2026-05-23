@@ -375,10 +375,12 @@ async function doRegister(): Promise<void> {
   }
 
   console.log('\n  ✓ Account created!');
-  console.log('  Welcome, ' + result.username + '! Your account is ready.');
+  console.log('  Welcome, ' + result.username + '!');
+  console.log('  Please login with your new account.');
 
-  // Create character and connect
-  connectNewCharacter(result.playerId!, result.username!, result.token!);
+  // Return to main menu instead of auto-connecting
+  console.log('  Press Enter to continue...');
+  rl.question('', () => mainMenu());
 }
 
 function doGuest(): void {

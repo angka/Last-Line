@@ -198,6 +198,16 @@ export async function parseCommand(cmd: string, save: SaveFile, combatState?: an
       return { text: `Gold: ${save.stats.gold}g` };
     }
 
+    case 'attack':
+    case 'a': {
+      return { text: 'You can only attack during combat. Use "explore" to seek enemies, or move to a new area.' };
+    }
+
+    case 'flee':
+    case 'f': {
+      return { text: 'Nothing to flee from. You\'re not in combat.' };
+    }
+
     case 'rest': {
       const area = getArea(save.worldState.currentArea);
       if (area && area.safeZone) {

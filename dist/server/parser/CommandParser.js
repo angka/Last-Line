@@ -174,6 +174,14 @@ async function parseCommand(cmd, save, combatState, _sessionId, playerId) {
         case 'gold': {
             return { text: `Gold: ${save.stats.gold}g` };
         }
+        case 'attack':
+        case 'a': {
+            return { text: 'You can only attack during combat. Use "explore" to seek enemies, or move to a new area.' };
+        }
+        case 'flee':
+        case 'f': {
+            return { text: 'Nothing to flee from. You\'re not in combat.' };
+        }
         case 'rest': {
             const area = (0, ContentManager_1.getArea)(save.worldState.currentArea);
             if (area && area.safeZone) {

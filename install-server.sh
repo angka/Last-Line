@@ -215,8 +215,8 @@ log_info "Step 10/10: Creating systemd service..."
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 ENV_FILE="${INSTALL_DIR}/.env"
 
-# Create .env file if it doesn't exist or is missing JWT secrets
-if [[ ! -f "${ENV_FILE}" ]] || ! grep -q "PLAYER_JWT_SECRET=[^c]" "${ENV_FILE}" 2>/dev/null; then
+# Create .env file if it doesn't exist or has placeholder secrets
+if [[ ! -f "${ENV_FILE}" ]] || grep -q "change-me" "${ENV_FILE}" 2>/dev/null; then
     log_info "Creating environment configuration..."
     run_as tee "${ENV_FILE}" > /dev/null << EOF
 # Last Line Server Configuration

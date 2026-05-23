@@ -215,8 +215,8 @@ log_info "Step 10/10: Creating systemd service..."
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 ENV_FILE="${INSTALL_DIR}/.env"
 
-# Create .env file if it doesn't exist
-if [[ ! -f "${ENV_FILE}" ]]; then
+# Create .env file if it doesn't exist or is missing JWT secrets
+if [[ ! -f "${ENV_FILE}" ]] || ! grep -q "PLAYER_JWT_SECRET=[^c]" "${ENV_FILE}" 2>/dev/null; then
     log_info "Creating environment configuration..."
     run_as tee "${ENV_FILE}" > /dev/null << EOF
 # Last Line Server Configuration
@@ -224,10 +224,9 @@ PORT=${GAME_PORT}
 ADMIN_PORT=${ADMIN_PORT}
 NODE_ENV=production
 
-# JWT Secrets - CHANGE THESE IN PRODUCTION!
-# Generate with: openssl rand -base64 32
-PLAYER_JWT_SECRET=change-me-$(openssl rand -hex 16)
-ADMIN_JWT_SECRET=change-me-$(openssl rand -hex 16)
+# JWT Secrets (auto-generated, safe to keep for development)
+PLAYER_JWT_SECRET=$(openssl rand -base64 32)
+ADMIN_JWT_SECRET=$(openssl rand -base64 32)
 
 # Steam API (optional - for Steam authentication)
 # STEAM_API_KEY=your-steam-api-key
@@ -244,6 +243,8 @@ EOF
     run_as chown "${CURRENT_USER}:${CURRENT_USER}" "${ENV_FILE}"
     run_as chmod 600 "${ENV_FILE}"
     log_warn "Created .env with default admin credentials - CHANGE THESE!"
+else
+    log_info "Using existing .env file with configured secrets"
 fi
 
 # Create systemd service
@@ -261,7 +262,7 @@ Type=simple
 User=${CURRENT_USER}
 Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
-Environment=NODE_ENV=production
+EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=/usr/bin/node dist/server/index.js
 
 # Auto-restart configuration
@@ -271,7 +272,7 @@ TimeoutStartSec=30
 TimeoutStopSec=30
 
 # Restart limits (prevent infinite loops)
-StartLimitIntervalSec=300
+StartLimitInterval=300
 StartLimitBurst=5
 
 # Logging

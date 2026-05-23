@@ -289,6 +289,7 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/last-line
+EnvironmentFile=/opt/last-line/.env
 ExecStart=/usr/bin/node dist/server/index.js
 
 # Auto-restart configuration
@@ -298,7 +299,7 @@ TimeoutStartSec=30
 TimeoutStopSec=30
 
 # Restart limits (prevent infinite loops)
-StartLimitIntervalSec=300
+StartLimitInterval=300
 StartLimitBurst=5
 
 # Logging
@@ -317,6 +318,8 @@ MemoryMax=512M
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Important:** The `EnvironmentFile=/opt/last-line/.env` line loads JWT secrets from the .env file. Without it, the server will fail to start.
 
 ```bash
 # Enable auto-start on boot

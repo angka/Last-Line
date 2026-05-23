@@ -3,6 +3,58 @@ import * as readline from 'readline';
 
 const SERVER_URL = process.env.SERVER_URL || 'ws://localhost:8080';
 
+// ─── Server Configuration ────────────────────────────────────────────────────────
+
+const TAILSCALE_IP = '100.108.29.73';
+const DEFAULT_PORT = '8080';
+
+let serverUrl: string | null = null;
+
+function getServerUrl(): string {
+  return serverUrl || SERVER_URL;
+}
+
+function promptServerSelection(): Promise<string> {
+  console.log('\n╔═══════════════════════════════════════════════════════╗');
+  console.log('║         Last Line - Server Selection                   ║');
+  console.log('╠═══════════════════════════════════════════════════════╣');
+  console.log(`║  [1] Connect to Tailscale (${TAILSCALE_IP})   ║`);
+  console.log('║  [2] Connect to localhost                            ║');
+  console.log('║  [3] Enter custom IP address                        ║');
+  console.log('║  [Q] Quit                                           ║');
+  console.log('╚═══════════════════════════════════════════════════════╝');
+
+  return new Promise((resolve) => {
+    rl.question('Enter selection: ', (choice: string) => {
+      const trimmed = choice.trim().toLowerCase();
+      if (trimmed === '1') {
+        console.log(`\n  → Connecting to ${TAILSCALE_IP}:${DEFAULT_PORT}...`);
+        resolve(`ws://${TAILSCALE_IP}:${DEFAULT_PORT}`);
+      } else if (trimmed === '2') {
+        console.log('\n  → Connecting to localhost:8080...');
+        resolve('ws://localhost:8080');
+      } else if (trimmed === '3') {
+        rl.question('  Enter server IP (without port): ', (ip: string) => {
+          const cleanIp = ip.trim();
+          if (!cleanIp) {
+            console.log('  Invalid IP. Using Tailscale default.');
+            resolve(`ws://${TAILSCALE_IP}:${DEFAULT_PORT}`);
+          } else {
+            console.log(`\n  → Connecting to ${cleanIp}:${DEFAULT_PORT}...`);
+            resolve(`ws://${cleanIp}:${DEFAULT_PORT}`);
+          }
+        });
+      } else if (trimmed === 'q') {
+        console.log('\n  Goodbye!');
+        process.exit(0);
+      } else {
+        console.log('  Invalid selection. Please try again.');
+        resolve(promptServerSelection());
+      }
+    });
+  });
+}
+
 interface ClientState {
   socket: WebSocket;
   sessionId?: string;
@@ -104,7 +156,7 @@ function displayStore(data: any): void {
 
 async function authLogin(): Promise<{ success: boolean; playerId?: string; username?: string; token?: string; error?: string }> {
   return new Promise((resolve) => {
-    const ws = new WebSocket(SERVER_URL);
+    const ws = new WebSocket(getServerUrl());
 
     ws.on('open', () => {
       rl.question('  Username or email: ', (username: string) => {
@@ -133,7 +185,7 @@ async function authLogin(): Promise<{ success: boolean; playerId?: string; usern
 
 async function authRegister(): Promise<{ success: boolean; playerId?: string; username?: string; token?: string; error?: string }> {
   return new Promise((resolve) => {
-    const ws = new WebSocket(SERVER_URL);
+    const ws = new WebSocket(getServerUrl());
 
     ws.on('open', () => {
       rl.question('  Choose a username (3-20 chars, letters/numbers/underscore): ', (username: string) => {
@@ -165,7 +217,7 @@ async function authRegister(): Promise<{ success: boolean; playerId?: string; us
 // ─── Connection ─────────────────────────────────────────────────────────────────
 
 function connectWithAuth(playerId: string, playerName: string, token: string, slot = 1): void {
-  const ws = new WebSocket(SERVER_URL);
+  const ws = new WebSocket(getServerUrl());
 
   ws.on('open', () => {
     console.log(`[Connected] Logging in as ${playerName}...`);
@@ -334,7 +386,7 @@ function doGuest(): void {
   const guestId = 'guest_' + Date.now();
   const guestName = 'Guest' + Math.floor(Math.random() * 9999);
 
-  const ws = new WebSocket(SERVER_URL);
+  const ws = new WebSocket(getServerUrl());
 
   ws.on('open', () => {
     ws.send(JSON.stringify({ type: 'auth_register', username: guestName, email: guestId + '@guest.local', password: 'guest_' + guestId }));
@@ -397,4 +449,19 @@ function characterSelect(playerId: string, playerName: string, token: string): v
 
 // ─── Boot ───────────────────────────────────────────────────────────────────────
 
-mainMenu();
+async function boot(): Promise<void> {
+  // Check for SERVER_URL env var first
+  if (process.env.SERVER_URL) {
+    serverUrl = process.env.SERVER_URL;
+    console.log(`\n  → Using server from SERVER_URL: ${serverUrl}`);
+    mainMenu();
+    return;
+  }
+
+  // Show server selection menu
+  const selectedUrl = await promptServerSelection();
+  serverUrl = selectedUrl;
+  mainMenu();
+}
+
+boot();

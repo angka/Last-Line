@@ -342,6 +342,68 @@ wss.on('connection', async (socket, _req) => {
             // Notify nearby players
             PresenceManager_1.presenceManager.broadcastToArea(newSave.worldState.currentArea, `[Nearby] ${name} has entered the area.`, pid);
             socket.send(JSON.stringify({ type: 'connected', sessionId, save: newSave }));
+            // Send story intro for new characters (level 1)
+            if (newSave.stats.level === 1) {
+                const storyIntro = `
+═══════════════════════════════════════════════════════════════
+                  THE WORLD IS DYING
+
+  Reality frays at the edges. The Void bleeds through cracks in
+  the fabric of existence. In villages like Ashford, people
+  speak of shadows that move wrong, of dreams that bleed into
+  waking hours.
+
+  You have arrived at the edge of the known world. Beyond these
+  cobblestones, darkness waits — ancient, hungry, patient.
+
+  But also: treasure, glory, and answers to questions you
+  haven't learned to ask yet.
+
+═══════════════════════════════════════════════════════════════
+`;
+                socket.send(JSON.stringify({ type: 'push', text: storyIntro }));
+                // Send first-steps commands card
+                const commandsCard = `
+═══════════════════════════════════════════════════════════════
+                    FIRST STEPS
+═══════════════════════════════════════════════════════════════
+
+  NAVIGATION
+    look (l)     — see area description
+    go north     — move north (or: n/s/e/w)
+    map          — view world map
+    travel       — fast travel to unlocked cities
+
+  COMBAT (when you encounter enemies)
+    attack (a)   — attack enemy
+    skill phys 1 — use physical skill
+    flee         — try to escape
+
+  SURVIVAL
+    stats        — view your stats
+    inv          — check inventory
+    use <n>      — use item from inventory
+    shop         — buy gear in cities
+    inn          — rest and save game
+
+  SOCIAL
+    who          — see nearby players
+    say <text>   — chat with area
+    msg <name>   — whisper a player
+
+  QUICK HELP
+    help         — show all commands
+    ?            — show this tips card
+
+═══════════════════════════════════════════════════════════════
+
+  Type 'look' to see Ashford Village Square.
+═══════════════════════════════════════════════════════════════
+`;
+                setTimeout(() => {
+                    socket.send(JSON.stringify({ type: 'push', text: commandsCard }));
+                }, 100);
+            }
             startRegen(newSession);
             return;
         }

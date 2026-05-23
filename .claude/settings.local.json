@@ -34,7 +34,9 @@
       "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development npm run start)",
       "Bash(PLAYER_JWT_SECRET=test123 ADMIN_JWT_SECRET=test123 NODE_ENV=development timeout 8 npm run start)",
       "Bash(npm list *)",
-      "Bash(chmod +x install-server.sh)"
+      "Bash(chmod +x install-server.sh)",
+      "Skill(superpowers:systematic-debugging)",
+      "Skill(superpowers:brainstorming)"
     ]
   }
 }

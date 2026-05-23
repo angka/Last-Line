@@ -1,9 +1,60 @@
 import WebSocket from 'ws';
 import * as readline from 'readline';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const SERVER_URL = process.env.SERVER_URL || 'ws://localhost:8080';
 
-// ─── Server Configuration ────────────────────────────────────────────────────────
+// ─── Session Persistence ───────────────────────────────────────────────────────
+
+interface SavedSession {
+  token: string;
+  playerId: string;
+  username: string;
+  serverUrl: string;
+}
+
+function getSessionDir(): string {
+  return path.join(os.homedir(), '.lastline');
+}
+
+function getSessionPath(): string {
+  return path.join(getSessionDir(), 'session.json');
+}
+
+function loadSession(): SavedSession | null {
+  try {
+    const sessionPath = getSessionPath();
+    if (!fs.existsSync(sessionPath)) return null;
+    const data = fs.readFileSync(sessionPath, 'utf8');
+    const session = JSON.parse(data) as SavedSession;
+    // Validate required fields
+    if (!session.token || !session.playerId || !session.username) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: SavedSession): void {
+  try {
+    const dir = getSessionDir();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getSessionPath(), JSON.stringify(session, null, 2));
+  } catch (e) {
+    console.log('  ⚠ Could not save session (ignoring).');
+  }
+}
+
+function clearSession(): void {
+  try {
+    const sessionPath = getSessionPath();
+    if (fs.existsSync(sessionPath)) fs.unlinkSync(sessionPath);
+  } catch { /* ignore */ }
+}
+
+// ─── Server Configuration ──────────────────────────────────────────────────────
 
 const TAILSCALE_IP = '100.108.29.73';
 const DEFAULT_PORT = '8080';
@@ -221,7 +272,7 @@ function connectWithAuth(playerId: string, playerName: string, token: string, sl
 
   ws.on('open', () => {
     console.log(`[Connected] Logging in as ${playerName}...`);
-    ws.send(JSON.stringify({ type: 'connect', playerId, name: playerName, token, slot }));
+    ws.send(JSON.stringify({ type: 'register', playerId, name: playerName, token, slot }));
   });
 
   ws.on('message', (data: Buffer) => {
@@ -319,27 +370,84 @@ function connectExistingCharacter(playerId: string, playerName: string, token: s
   connectWithAuth(playerId, playerName, token, 1);
 }
 
+// ─── Continue Session ──────────────────────────────────────────────────────────
+
+function doContinue(savedSession: SavedSession): void {
+  // Validate saved session by attempting to connect
+  const ws = new WebSocket(savedSession.serverUrl);
+
+  ws.on('open', () => {
+    // Attempt to load character (use saved playerId)
+    ws.send(JSON.stringify({
+      type: 'load',
+      playerId: savedSession.playerId,
+      token: savedSession.token,
+      slot: 1,
+    }));
+  });
+
+  ws.on('message', (data: Buffer) => {
+    const msg = JSON.parse(data.toString());
+    ws.close();
+
+    if (msg.type === 'loaded') {
+      state = {
+        socket: ws,
+        sessionId: msg.sessionId,
+        playerId: savedSession.playerId,
+        playerName: msg.save?.name ?? savedSession.username,
+        token: savedSession.token,
+        saveSlot: 1,
+        connected: true,
+      };
+      console.log('\n  ✓ Session restored!');
+      console.log('  Welcome back, ' + state.playerName + '.\n');
+      ws.send(JSON.stringify({ type: 'command', cmd: 'look' }));
+      setTimeout(() => prompt(), 100);
+      return;
+    }
+
+    // Session invalid or no save - go to character select
+    console.log('\n  ⚠ Saved session expired or no save found.');
+    console.log('  Please login to continue.');
+    characterSelect(savedSession.playerId, savedSession.username, savedSession.token);
+  });
+
+  ws.on('error', () => {
+    console.log('\n  ⚠ Cannot connect to server.');
+    mainMenu();
+  });
+}
+
 // ─── Boot / Main Menu ───────────────────────────────────────────────────────────
 
 function mainMenu(): void {
+  const savedSession = loadSession();
+
   console.log(divider());
   console.log('  ⚔  LAST LINE  —  CLI Adventure Game');
   console.log(subDivider());
+
+  if (savedSession) {
+    console.log(`  [C] Continue as ${savedSession.username}`);
+  }
   console.log('  [1] Login (existing account)');
   console.log('  [2] Register (new account)');
   console.log('  [3] Continue as Guest (quick play)');
   console.log(footer());
 
   rl.question('> ', (choice: string) => {
-    const trimmed = choice.trim();
-    if (trimmed === '1') {
+    const trimmed = choice.trim().toLowerCase();
+    if (trimmed === 'c' && savedSession) {
+      doContinue(savedSession);
+    } else if (trimmed === '1') {
       doLogin();
     } else if (trimmed === '2') {
       doRegister();
     } else if (trimmed === '3') {
       doGuest();
     } else {
-      console.log('Invalid choice. Please enter 1, 2, or 3.');
+      console.log('Invalid choice. Please try again.');
       mainMenu();
     }
   });
@@ -358,6 +466,14 @@ async function doLogin(): Promise<void> {
 
   console.log('\n  ✓ Login successful!');
   console.log('  Welcome back, ' + result.username + '!');
+
+  // Save session for later continuation
+  saveSession({
+    token: result.token!,
+    playerId: result.playerId!,
+    username: result.username!,
+    serverUrl: getServerUrl(),
+  });
 
   // Now show character selection
   characterSelect(result.playerId!, result.username!, result.token!);

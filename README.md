@@ -533,6 +533,49 @@ When the client prompts for server address, enter:
 - **Local**: `localhost:8080`
 - **Remote**: `<server-ip>:8080`
 
+### Client Features
+
+#### Session Persistence
+
+The client automatically saves your login session to `~/.lastline/session.json`. When you restart the client, you'll see a "Continue as [username]" option to skip re-entering credentials.
+
+```
+╔═══════════════════════════════════════════════════════╗
+║         Last Line - Server Selection                   ║
+╠═══════════════════════════════════════════════════════╣
+║  [C] Continue as angka                                ║
+║  [1] Login (existing account)                         ║
+║  [2] Register (new account)                           ║
+║  [3] Continue as Guest (quick play)                   ║
+╚═══════════════════════════════════════════════════════╝
+```
+
+To clear saved session: manually delete `~/.lastline/session.json`
+
+#### New Player Experience
+
+First-time characters see:
+1. **Dark Fantasy Story Intro** — Sets the tone of a dying world where reality frays
+2. **First Steps Commands Card** — Quick reference for essential commands
+3. **Starting Location** — Ashford Village Square (safe zone, level 1-5)
+
+```
+═══════════════════════════════════════════════════════════════
+                  THE WORLD IS DYING
+
+  Reality frays at the edges. The Void bleeds through cracks in
+  the fabric of existence. In villages like Ashford, people
+  speak of shadows that move wrong, of dreams that bleed into
+  waking hours.
+
+  You have arrived at the edge of the known world. Beyond these
+  cobblestones, darkness waits — ancient, hungry, patient.
+
+  But also: treasure, glory, and answers to questions you
+  haven't learned to ask yet.
+═══════════════════════════════════════════════════════════════
+```
+
 ---
 
 ## Player Commands

@@ -1,0 +1,23 @@
+sudo curl -fsSL https://raw.githubusercontent.com/angka/Last-Line/refs/heads/main/update-server.sh | sudo bash
+[INFO] Last Line Server Update
+[INFO] ================================
+[INFO] Install directory: /opt/last-line
+[INFO] 
+[INFO] Step 1/5: Stopping server...
+[SUCCESS] Server stopped
+[INFO] Step 2/5: Pulling latest changes from GitHub...
+remote: Enumerating objects: 55, done.
+remote: Counting objects: 100% (55/55), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 39 (delta 25), reused 36 (delta 22), pack-reused 0 (from 0)
+Unpacking objects: 100% (39/39), 18.81 KiB | 350.00 KiB/s, done.
+From https://github.com/angka/Last-Line
+   f87b143..47c1dc2  main       -> origin/main
+From https://github.com/angka/Last-Line
+ * branch            main       -> FETCH_HEAD
+Updating f87b143..47c1dc2
+error: Your local changes to the following files would be overwritten by merge:
+        dist/client/index.js
+        dist/client/index.js.map
+Please commit your changes or stash them before you merge.
+Aborting

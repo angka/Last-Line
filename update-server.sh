@@ -59,6 +59,8 @@ if [[ ! -d ".git" ]]; then
 fi
 
 git fetch origin
+# Discard any local build artifacts (they'll be regenerated during build)
+git checkout -- dist/ 2>/dev/null || true
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
 

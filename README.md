@@ -153,6 +153,7 @@ The installer will:
 7. Create systemd service for automatic startup
 8. Generate secure JWT secrets
 9. Start the server
+10. Create update script for easy future updates
 
 ### Installation Options
 
@@ -391,6 +392,31 @@ sudo systemctl reenable last-line
 sudo systemctl daemon-reload
 sudo systemctl start last-line
 ```
+
+### Updating the Server
+
+When a new version is released, update the server using the update script:
+
+```bash
+# Download and run the update script
+sudo curl -fsSL https://raw.githubusercontent.com/angka/Last-Line/main/update-server.sh -o /opt/last-line/update-server.sh
+sudo bash /opt/last-line/update-server.sh
+```
+
+Or if the script is already on your server:
+
+```bash
+sudo bash /opt/last-line/update-server.sh
+```
+
+The update script will:
+1. Stop the server
+2. Pull the latest changes from GitHub
+3. Install npm dependencies
+4. Rebuild TypeScript
+5. Restart the server
+
+**Note:** The update script is included in the initial installation.
 
 ### Default Ports
 
